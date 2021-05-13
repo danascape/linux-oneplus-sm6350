@@ -214,7 +214,7 @@ static const struct tfa98xx_rate rate_to_fssel[] = {
 };
 
 
-void tfa98xx_firmware_show()
+void tfa98xx_firmware_show(void)
 {
 	char  tfa98xx_name[30] ="";
 	snprintf(tfa98xx_name,sizeof(tfa98xx_name),"tfa9874DUK/N1");
