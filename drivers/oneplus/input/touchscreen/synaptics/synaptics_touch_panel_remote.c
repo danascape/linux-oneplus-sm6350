@@ -996,7 +996,7 @@ void unregister_remote_device(void)
 /*
    static int __init rmidev_module_init(void)
    {
-  // rmidev_init_device();
+   rmidev_init_device();
 
    return 0;
    }
