@@ -54,6 +54,9 @@
 #include <soc/qcom/scm.h>
 #include "soc/qcom/secure_buffer.h"
 #include "soc/qcom/qtee_shmbridge.h"
+#if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS)
+#include "iris/dsi_iris5_api.h"
+#endif
 
 #define CREATE_TRACE_POINTS
 #include "sde_trace.h"
@@ -1247,7 +1250,8 @@ static void sde_kms_wait_for_commit_done(struct msm_kms *kms,
 	SDE_ATRACE_BEGIN("sde_kms_wait_for_commit_done");
 	list_for_each_entry(encoder, &dev->mode_config.encoder_list, head) {
 		cwb_disabling = false;
-		if (encoder->crtc != crtc) {
+		if (encoder->crtc != crtc &&
+				!sde_encoder_is_cwb_disabling(encoder, crtc)) {
 			cwb_disabling = sde_encoder_is_cwb_disabling(encoder,
 					crtc);
 			if (!cwb_disabling)
@@ -3126,7 +3130,11 @@ static const struct msm_kms_funcs kms_funcs = {
 	.get_address_space_device = _sde_kms_get_address_space_device,
 	.postopen = _sde_kms_post_open,
 	.check_for_splash = sde_kms_check_for_splash,
+
 	.get_mixer_count = sde_kms_get_mixer_count,
+#if defined(CONFIG_PXLW_IRIS) || defined(CONFIG_PXLW_SOFT_IRIS)
+	.iris_operate = iris_sde_kms_iris_operate,
+#endif
 };
 
 /* the caller api needs to turn on clock before calling it */
