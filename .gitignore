@@ -140,8 +140,5 @@ kernel/configs/android-*.cfg
 #arch/arm64/boot/dts/vendor
 include/linux/oem
 
-# Tech package directories
-techpack/
-
 # OP SLA feature
 opslalib/slalib
