@@ -266,8 +266,11 @@ void dsi_phy_hw_v3_0_enable(struct dsi_phy_hw *phy,
 	DSI_W32(phy, DSIPHY_CMN_GLBL_CTRL, 0x10);
 
 	/* Enable LDO */
+#ifdef OEM_TARGET_PRODUCT_EBBA
+	DSI_W32(phy, DSIPHY_CMN_VREG_CTRL, 0x58);
+#else
 	DSI_W32(phy, DSIPHY_CMN_VREG_CTRL, 0x59);
-
+#endif
 	/* Configure PHY lane swap */
 	dsi_phy_hw_v3_0_lane_swap_config(phy, &cfg->lane_map);
 
