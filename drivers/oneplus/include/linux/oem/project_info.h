@@ -8,7 +8,11 @@ typedef     __u8        uint8;
 #define SECURE_BOOT1			(SECURE_BOOT_BASE + 0x4*1)
 #define BUF_SIZE		64
 
-#define SMEM_DUMP_INFO 138
+#ifdef OEM_TARGET_PRODUCT_EBBA
+#define SMEM_DUMP_INFO 129
+#else
+#define SMEM_DUMP_INFO 135
+#endif
 #define SMEM_PROJECT_INFO 136
 #define NONDEFINE  -1
 
@@ -19,6 +23,8 @@ extern void *panic_info;
 
 struct project_info {
     char project_name[8];
+    char project_codename[20];
+    char reservename[12];
     uint32  prj_version;
     uint32  hw_version;
     uint32  rf_v1;
@@ -36,7 +42,7 @@ struct project_info {
     uint32  reserve03;
     uint32  reserve04;
     uint32  reserve05;
-    uint32  reserve06;
+    uint32  a_board_version;
     uint32  reserve07;
     uint32  reserve08;
     uint32  reserve09;
@@ -100,6 +106,6 @@ int push_component_info(enum COMPONENT_TYPE type,
 int reset_component_info(enum COMPONENT_TYPE type);
 uint32 get_hw_version(void);
 void save_dump_reason_to_smem(char *info, char *function_name);
-
+char *get_project_name(void);
 
 #endif
