@@ -5,7 +5,7 @@
 #include "billie8-qrd.dtsi"
 
 / {
-	model = "Qualcomm Technologies, Inc. Lagoon QRD ebba 20813";
+	model = "Qualcomm Technologies, Inc. Lagoon QRD billie 20813";
 	compatible = "qcom,lagoon-qrd", "qcom,lagoon", "qcom,qrd";
 	qcom,msm-id = <434 0x10000>, <459 0x10000>;
 	qcom,board-id = <0x1000B 0>;
