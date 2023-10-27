@@ -3,7 +3,6 @@
  * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  * Copyright (c) 2022, Qualcomm Innovation Center, Inc. All rights reserved.
  */
-#include <linux/debugfs.h>
 #include <linux/errno.h>
 #include <linux/delay.h>
 #include <linux/io.h>
@@ -18,13 +17,14 @@
 #include <linux/of.h>
 #include <linux/dma-buf.h>
 #include <linux/ion_kernel.h>
+#include <linux/proc_fs.h>
 
 #include <soc/qcom/scm.h>
 #include <soc/qcom/qseecomi.h>
 #include <soc/qcom/qtee_shmbridge.h>
 
 /* QSEE_LOG_BUF_SIZE = 32K */
-#define QSEE_LOG_BUF_SIZE 0x8000
+#define QSEE_LOG_BUF_SIZE 0x10000
 
 /* enlarged qsee log buf size is 128K by default */
 #define QSEE_LOG_BUF_SIZE_V2 0x20000
@@ -1131,7 +1131,7 @@ static ssize_t tzdbgfs_read_unencrypted(struct file *file, char __user *buf,
 	size_t count, loff_t *offp)
 {
 	int len = 0;
-	int tz_id = *(int *)(file->private_data);
+        int tz_id = PDE_DATA(file_inode(file));
 
 	if (tz_id == TZDBG_BOOT || tz_id == TZDBG_RESET ||
 		tz_id == TZDBG_INTERRUPT || tz_id == TZDBG_GENERAL ||
@@ -1414,10 +1414,10 @@ static int  tzdbgfs_init(struct platform_device *pdev)
 {
 	int rc = 0;
 	int i;
-	struct dentry           *dent_dir;
-	struct dentry           *dent;
+	struct proc_dir_entry *dent_dir    = NULL;
+	struct proc_dir_entry *dent        = NULL;
 
-	dent_dir = debugfs_create_dir("tzdbg", NULL);
+	dent_dir = proc_mkdir("tzdbg", NULL);
 	if (dent_dir == NULL) {
 		dev_err(&pdev->dev, "tzdbg debugfs_create_dir failed\n");
 		return -ENOMEM;
@@ -1425,9 +1425,9 @@ static int  tzdbgfs_init(struct platform_device *pdev)
 
 	for (i = 0; i < TZDBG_STATS_MAX; i++) {
 		tzdbg.debug_tz[i] = i;
-		dent = debugfs_create_file_unsafe(tzdbg.stat[i].name,
-				0444, dent_dir,
-				&tzdbg.debug_tz[i], &tzdbg_fops);
+		dent = proc_create_data(tzdbg.stat[i].name,
+				0444, dent_dir
+				, &tzdbg_fops, &tzdbg.debug_tz[i]);
 		if (dent == NULL) {
 			dev_err(&pdev->dev, "TZ debugfs_create_file failed\n");
 			rc = -ENOMEM;
@@ -1438,16 +1438,17 @@ static int  tzdbgfs_init(struct platform_device *pdev)
 	platform_set_drvdata(pdev, dent_dir);
 	return 0;
 err:
-	debugfs_remove_recursive(dent_dir);
+	proc_remove(dent_dir);
 
 	return rc;
 }
 
 static void tzdbgfs_exit(struct platform_device *pdev)
 {
-	struct dentry *dent_dir;
+	struct proc_dir_entry *dent_dir;
+
 	dent_dir = platform_get_drvdata(pdev);
-	debugfs_remove_recursive(dent_dir);
+	proc_remove(dent_dir);
 }
 
 static int __update_hypdbg_base(struct platform_device *pdev,
@@ -1671,8 +1672,10 @@ static int tz_log_probe(struct platform_device *pdev)
 		goto exit_free_encr_log_buf;
 	}
 
+        pr_info("%s: Start init tz procfs\n", __func__);
 	if (tzdbgfs_init(pdev))
 		goto exit_free_disp_buf;
+        pr_info("%s: End init tz procfs\n", __func__);
 	return 0;
 
 exit_free_disp_buf:
