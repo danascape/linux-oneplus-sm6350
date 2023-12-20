@@ -541,6 +541,7 @@ static struct device_attribute power_supply_attrs[] = {
 	/* @bsp, 2020/04/01 2cell battery support */
 	POWER_SUPPLY_ATTR(vbat_cell_max),
 	POWER_SUPPLY_ATTR(vbat_cell_min),
+	POWER_SUPPLY_ATTR(cc_toggle_enable),
 	POWER_SUPPLY_ATTR(fg_type),
 	POWER_SUPPLY_ATTR(charger_status),
 	/* Local extensions of type int64_t */
