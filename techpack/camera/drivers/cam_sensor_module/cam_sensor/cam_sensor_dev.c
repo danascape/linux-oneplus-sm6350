@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #include "cam_sensor_dev.h"
@@ -8,23 +8,339 @@
 #include "cam_sensor_soc.h"
 #include "cam_sensor_core.h"
 
+/* Add for AT camera test */
+struct cam_sensor_i2c_reg_setting_array {
+	struct cam_sensor_i2c_reg_array reg_setting[1024];
+	unsigned short size;
+	enum camera_sensor_i2c_type addr_type;
+	enum camera_sensor_i2c_type data_type;
+	unsigned short delay;
+};
+
+struct cam_sensor_settings {
+    struct cam_sensor_i2c_reg_setting_array ov64b_setting1;
+    struct cam_sensor_i2c_reg_setting_array ov64b_setting2;
+    struct cam_sensor_i2c_reg_setting_array ov64b_setting3;
+    struct cam_sensor_i2c_reg_setting_array imx471_setting;
+    struct cam_sensor_i2c_reg_setting_array hi846_setting;
+    struct cam_sensor_i2c_reg_setting_array ov02b10_setting;
+    struct cam_sensor_i2c_reg_setting_array gc02m1b_setting;
+    struct cam_sensor_i2c_reg_setting_array streamoff;
+    struct cam_sensor_i2c_reg_setting_array hi846_streamoff;
+    struct cam_sensor_i2c_reg_setting_array ov02b10_streamoff;
+    struct cam_sensor_i2c_reg_setting_array gc02m1b_streamoff;
+};
+
+struct cam_sensor_settings sensor_settings = {
+#include "cam_sensor_setting.h"
+};
+
+#ifdef ENABLE_SENSOR_POWER_UP_IN_ADVANCE
+struct cam_sensor_settings sensor_init_settings = {
+#include "cam_sensor_initsettings.h"
+};
+
+static int sensor_start_thread(void *arg) {
+    struct cam_sensor_ctrl_t *s_ctrl = (struct cam_sensor_ctrl_t *)arg;
+    int rc = 0;
+    struct cam_sensor_i2c_reg_setting sensor_init_setting;
+
+    if (!s_ctrl)
+    {
+        CAM_ERR(CAM_SENSOR, "s_ctrl is NULL");
+        return -1;
+    }
+    mutex_lock(&(s_ctrl->cam_sensor_mutex));
+
+    //power up for sensor
+    mutex_lock(&(s_ctrl->sensor_power_state_mutex));
+    if(s_ctrl->sensor_power_state == CAM_SENSOR_POWER_OFF)
+    {
+        rc = cam_sensor_power_up(s_ctrl);
+        if(rc < 0) {
+            CAM_ERR(CAM_SENSOR, "sensor power up faild!");
+         } else {
+            CAM_INFO(CAM_SENSOR, "sensor power up success sensor id 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            s_ctrl->sensor_power_state = CAM_SENSOR_POWER_ON;
+         }
+    } else {
+        CAM_INFO(CAM_SENSOR, "sensor have power up!");
+    }
+    mutex_unlock(&(s_ctrl->sensor_power_state_mutex));
+
+    //write initsetting for sensor
+    if (rc == 0) {
+        mutex_lock(&(s_ctrl->sensor_initsetting_mutex));
+        if(s_ctrl->sensor_initsetting_state == CAM_SENSOR_SETTING_WRITE_INVALID){
+            if(s_ctrl->sensordata->slave_info.sensor_id == 0x6442)
+            {
+                sensor_init_setting.reg_setting = sensor_init_settings.ov64b_setting1.reg_setting;
+                sensor_init_setting.addr_type = sensor_init_settings.ov64b_setting1.addr_type;
+                sensor_init_setting.data_type = sensor_init_settings.ov64b_setting1.data_type;
+                sensor_init_setting.size = sensor_init_settings.ov64b_setting1.size;
+                sensor_init_setting.delay = sensor_init_settings.ov64b_setting1.delay;
+                rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_init_setting);
+                if(rc < 0)
+                {
+                    CAM_ERR(CAM_SENSOR, "write setting failed!");
+                } else {
+                    CAM_INFO(CAM_SENSOR, "write setting1 success!");
+                }
+
+                sensor_init_setting.reg_setting = sensor_init_settings.ov64b_setting2.reg_setting;
+                sensor_init_setting.addr_type = sensor_init_settings.ov64b_setting2.addr_type;
+                sensor_init_setting.data_type = sensor_init_settings.ov64b_setting2.data_type;
+                sensor_init_setting.size = sensor_init_settings.ov64b_setting2.size;
+                sensor_init_setting.delay = sensor_init_settings.ov64b_setting2.delay;
+                rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_init_setting);
+                if(rc < 0)
+                {
+                    CAM_ERR(CAM_SENSOR, "write setting failed!");
+                } else {
+                    CAM_INFO(CAM_SENSOR, "write setting1 success!");
+                }
+
+                sensor_init_setting.reg_setting = sensor_init_settings.ov64b_setting3.reg_setting;
+                sensor_init_setting.addr_type = sensor_init_settings.ov64b_setting3.addr_type;
+                sensor_init_setting.data_type = sensor_init_settings.ov64b_setting3.data_type;
+                sensor_init_setting.size = sensor_init_settings.ov64b_setting3.size;
+                sensor_init_setting.delay = sensor_init_settings.ov64b_setting3.delay;
+                rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_init_setting);
+                if(rc < 0)
+                {
+                    CAM_ERR(CAM_SENSOR, "write setting failed!");
+                } else {
+                    CAM_INFO(CAM_SENSOR, "write setting1 success!");
+                    s_ctrl->sensor_initsetting_state = CAM_SENSOR_SETTING_WRITE_SUCCESS;
+                }
+
+            }
+        } else {
+            CAM_INFO(CAM_SENSOR, "sensor setting have write!");
+        }
+        mutex_unlock(&(s_ctrl->sensor_initsetting_mutex));
+    }
+
+    mutex_unlock(&(s_ctrl->cam_sensor_mutex));
+    return rc;
+
+}
+
+static int cam_sensor_start(struct cam_sensor_ctrl_t *s_ctrl) {
+    int rc = 0;
+
+    if(s_ctrl == NULL)
+    {
+        CAM_ERR(CAM_SENSOR, "s_ctrl is null ");
+        return -1;
+    }
+
+    mutex_lock(&(s_ctrl->cam_sensor_mutex));
+
+    mutex_lock(&(s_ctrl->sensor_power_state_mutex));
+    if(s_ctrl->sensor_power_state == CAM_SENSOR_POWER_OFF)
+    {
+        s_ctrl->sensor_open_thread = kthread_run(sensor_start_thread, s_ctrl, s_ctrl->device_name);
+        if (!s_ctrl->sensor_open_thread) {
+            CAM_ERR(CAM_SENSOR, "create sensor start thread failed");
+            rc = -1;
+        }
+        else
+        {
+            CAM_INFO(CAM_SENSOR, "create sensor start thread success");
+        }
+    }
+    else
+    {
+        CAM_INFO(CAM_SENSOR, "sensor have power up");
+    }
+    mutex_unlock(&(s_ctrl->sensor_power_state_mutex));
+
+    mutex_unlock(&(s_ctrl->cam_sensor_mutex));
+    return rc;
+}
+
+static int cam_sensor_stop(struct cam_sensor_ctrl_t *s_ctrl) {
+    int rc = 0;
+    CAM_ERR(CAM_SENSOR,"sensor do stop");
+    mutex_lock(&(s_ctrl->cam_sensor_mutex));
+
+    //power off for sensor
+    mutex_lock(&(s_ctrl->sensor_power_state_mutex));
+    if(s_ctrl->sensor_power_state == CAM_SENSOR_POWER_ON)
+    {
+        rc = cam_sensor_power_down(s_ctrl);
+        if(rc < 0) {
+            CAM_ERR(CAM_SENSOR, "sensor power down faild!");
+         } else {
+            CAM_INFO(CAM_SENSOR, "sensor power down success sensor id 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            s_ctrl->sensor_power_state = CAM_SENSOR_POWER_OFF;
+            mutex_lock(&(s_ctrl->sensor_initsetting_mutex));
+            s_ctrl->sensor_initsetting_state = CAM_SENSOR_SETTING_WRITE_INVALID;
+            mutex_unlock(&(s_ctrl->sensor_initsetting_mutex));
+         }
+    } else {
+        CAM_INFO(CAM_SENSOR, "sensor have power down!");
+    }
+    mutex_unlock(&(s_ctrl->sensor_power_state_mutex));
+
+    mutex_unlock(&(s_ctrl->cam_sensor_mutex));
+    return rc;
+}
+#endif
 static long cam_sensor_subdev_ioctl(struct v4l2_subdev *sd,
 	unsigned int cmd, void *arg)
 {
 	int rc = 0;
 	struct cam_sensor_ctrl_t *s_ctrl =
 		v4l2_get_subdevdata(sd);
+	struct cam_sensor_i2c_reg_setting sensor_setting;
 
 	switch (cmd) {
 	case VIDIOC_CAM_CONTROL:
 		rc = cam_sensor_driver_cmd(s_ctrl, arg);
 		break;
+	/* Add for AT camera test */
+	case VIDIOC_CAM_FTM_POWNER_DOWN:
+		CAM_ERR(CAM_SENSOR, "FTM stream off");
+		if (s_ctrl->sensordata->slave_info.sensor_id == 0x6442
+            ||s_ctrl->sensordata->slave_info.sensor_id == 0x471) {
+            sensor_setting.reg_setting = sensor_settings.streamoff.reg_setting;
+            sensor_setting.addr_type = sensor_settings.streamoff.addr_type;
+            sensor_setting.data_type = sensor_settings.streamoff.data_type;
+            sensor_setting.size = sensor_settings.streamoff.size;
+            sensor_setting.delay = sensor_settings.streamoff.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+            if (rc < 0) {
+            /* If the I2C reg write failed for the first section reg, send
+                the result instead of keeping writing the next section of reg. */
+                CAM_ERR(CAM_SENSOR, "FTM Failed to stream off setting,rc=%d.",rc);
+            } else {
+                CAM_ERR(CAM_SENSOR, "FTM successfully to stream off");
+            }
+        } else if (s_ctrl->sensordata->slave_info.sensor_id == 0x4608) {
+            sensor_setting.reg_setting = sensor_settings.hi846_streamoff.reg_setting;
+            sensor_setting.addr_type = sensor_settings.hi846_streamoff.addr_type;
+            sensor_setting.data_type = sensor_settings.hi846_streamoff.data_type;
+            sensor_setting.size = sensor_settings.hi846_streamoff.size;
+            sensor_setting.delay = sensor_settings.hi846_streamoff.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+        } else if (s_ctrl->sensordata->slave_info.sensor_id == 0x002B) {
+            sensor_setting.reg_setting = sensor_settings.ov02b10_streamoff.reg_setting;
+            sensor_setting.addr_type = sensor_settings.ov02b10_streamoff.addr_type;
+            sensor_setting.data_type = sensor_settings.ov02b10_streamoff.data_type;
+            sensor_setting.size = sensor_settings.ov02b10_streamoff.size;
+            sensor_setting.delay = sensor_settings.ov02b10_streamoff.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+        } else if (s_ctrl->sensordata->slave_info.sensor_id == 0x02e0) {
+            sensor_setting.reg_setting = sensor_settings.gc02m1b_streamoff.reg_setting;
+            sensor_setting.addr_type = sensor_settings.gc02m1b_streamoff.addr_type;
+            sensor_setting.data_type = sensor_settings.gc02m1b_streamoff.data_type;
+            sensor_setting.size = sensor_settings.gc02m1b_streamoff.size;
+            sensor_setting.delay = sensor_settings.gc02m1b_streamoff.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+        }
+        rc = cam_sensor_power_down(s_ctrl);
+        CAM_ERR(CAM_SENSOR, "FTM power down.rc=%d",rc);
+        break;
+    case VIDIOC_CAM_FTM_POWNER_UP:
+        rc = cam_sensor_power_up(s_ctrl);
+        CAM_ERR(CAM_SENSOR, "FTM power up sensor id 0x%x,result %d",s_ctrl->sensordata->slave_info.sensor_id,rc);
+        if (rc < 0) {
+            CAM_ERR(CAM_SENSOR, "FTM power up failed!");
+            break;
+        }
+        if (s_ctrl->sensordata->slave_info.sensor_id == 0x6442) {
+            CAM_ERR(CAM_SENSOR, "FTM sensor setting1 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            sensor_setting.reg_setting = sensor_settings.ov64b_setting1.reg_setting;
+            sensor_setting.addr_type = sensor_settings.ov64b_setting1.addr_type;
+            sensor_setting.data_type = sensor_settings.ov64b_setting1.data_type;
+            sensor_setting.size = sensor_settings.ov64b_setting1.size;
+            sensor_setting.delay = sensor_settings.ov64b_setting1.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+            if (rc < 0) {
+                CAM_ERR(CAM_SENSOR, "FTM Failed to write sensor setting1");
+                goto power_down;
+            }
+            CAM_ERR(CAM_SENSOR, "FTM sensor setting2 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            sensor_setting.reg_setting = sensor_settings.ov64b_setting2.reg_setting;
+            sensor_setting.addr_type = sensor_settings.ov64b_setting2.addr_type;
+            sensor_setting.data_type = sensor_settings.ov64b_setting2.data_type;
+            sensor_setting.size = sensor_settings.ov64b_setting2.size;
+            sensor_setting.delay = sensor_settings.ov64b_setting2.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+            if (rc < 0) {
+                CAM_ERR(CAM_SENSOR, "FTM Failed to write sensor setting2");
+                goto power_down;
+            }
+            CAM_ERR(CAM_SENSOR, "FTM sensor setting3 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            sensor_setting.reg_setting = sensor_settings.ov64b_setting3.reg_setting;
+            sensor_setting.addr_type = sensor_settings.ov64b_setting3.addr_type;
+            sensor_setting.data_type = sensor_settings.ov64b_setting3.data_type;
+            sensor_setting.size = sensor_settings.ov64b_setting3.size;
+            sensor_setting.delay = sensor_settings.ov64b_setting3.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+        } else if (s_ctrl->sensordata->slave_info.sensor_id == 0x471) {
+            CAM_ERR(CAM_SENSOR, "FTM sensor setting 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            sensor_setting.reg_setting = sensor_settings.imx471_setting.reg_setting;
+            sensor_setting.addr_type = sensor_settings.imx471_setting.addr_type;
+            sensor_setting.data_type = sensor_settings.imx471_setting.data_type;
+            sensor_setting.size = sensor_settings.imx471_setting.size;
+            sensor_setting.delay = sensor_settings.imx471_setting.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+        } else if (s_ctrl->sensordata->slave_info.sensor_id == 0x4608) {
+            CAM_ERR(CAM_SENSOR, "FTM sensor setting 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            sensor_setting.reg_setting = sensor_settings.hi846_setting.reg_setting;
+            sensor_setting.addr_type = sensor_settings.hi846_setting.addr_type;
+            sensor_setting.data_type = sensor_settings.hi846_setting.data_type;
+            sensor_setting.size = sensor_settings.hi846_setting.size;
+            sensor_setting.delay = sensor_settings.hi846_setting.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+        } else if (s_ctrl->sensordata->slave_info.sensor_id == 0x002B) {
+            CAM_ERR(CAM_SENSOR, "FTM sensor setting 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            sensor_setting.reg_setting = sensor_settings.ov02b10_setting.reg_setting;
+            sensor_setting.addr_type = sensor_settings.ov02b10_setting.addr_type;
+            sensor_setting.data_type = sensor_settings.ov02b10_setting.data_type;
+            sensor_setting.size = sensor_settings.ov02b10_setting.size;
+            sensor_setting.delay = sensor_settings.ov02b10_setting.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+        } else if (s_ctrl->sensordata->slave_info.sensor_id == 0x02e0) {
+            CAM_ERR(CAM_SENSOR, "FTM sensor setting 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            sensor_setting.reg_setting = sensor_settings.gc02m1b_setting.reg_setting;
+            sensor_setting.addr_type = sensor_settings.gc02m1b_setting.addr_type;
+            sensor_setting.data_type = sensor_settings.gc02m1b_setting.data_type;
+            sensor_setting.size = sensor_settings.gc02m1b_setting.size;
+            sensor_setting.delay = sensor_settings.gc02m1b_setting.delay;
+            rc = camera_io_dev_write(&(s_ctrl->io_master_info), &sensor_setting);
+        }else {
+            CAM_ERR(CAM_SENSOR, "FTM unknown sensor id 0x%x",s_ctrl->sensordata->slave_info.sensor_id);
+            rc = -1;
+        }
+        if (rc < 0) {
+            CAM_ERR(CAM_SENSOR, "FTM Failed to write sensor setting");
+            goto power_down;
+        } else {
+            CAM_ERR(CAM_SENSOR, "FTM successfully to write sensor setting");
+        }
+        break;
+#ifdef ENABLE_SENSOR_POWER_UP_IN_ADVANCE
+        case VIDIOC_CAM_SENSOR_STATR:
+            rc = cam_sensor_start(s_ctrl);
+            break;
+        case VIDIOC_CAM_SENSOR_STOP:
+            rc = cam_sensor_stop(s_ctrl);
+            break;
+#endif
 	default:
 		CAM_ERR(CAM_SENSOR, "Invalid ioctl cmd: %d", cmd);
 		rc = -EINVAL;
 		break;
 	}
 	return rc;
+power_down:
+    CAM_ERR(CAM_SENSOR, "FTM wirte setting failed do power down");
+    cam_sensor_power_down(s_ctrl);
+    return rc;
 }
 
 static int cam_sensor_subdev_open(struct v4l2_subdev *sd,
@@ -210,8 +526,6 @@ static int32_t cam_sensor_driver_i2c_probe(struct i2c_client *client,
 	INIT_LIST_HEAD(&(s_ctrl->i2c_data.config_settings.list_head));
 	INIT_LIST_HEAD(&(s_ctrl->i2c_data.streamon_settings.list_head));
 	INIT_LIST_HEAD(&(s_ctrl->i2c_data.streamoff_settings.list_head));
-	INIT_LIST_HEAD(&(s_ctrl->i2c_data.poweron_reg_settings.list_head));
-	INIT_LIST_HEAD(&(s_ctrl->i2c_data.poweroff_reg_settings.list_head));
 	INIT_LIST_HEAD(&(s_ctrl->i2c_data.read_settings.list_head));
 
 	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++)
@@ -349,10 +663,13 @@ static int32_t cam_sensor_driver_platform_probe(
 	INIT_LIST_HEAD(&(s_ctrl->i2c_data.config_settings.list_head));
 	INIT_LIST_HEAD(&(s_ctrl->i2c_data.streamon_settings.list_head));
 	INIT_LIST_HEAD(&(s_ctrl->i2c_data.streamoff_settings.list_head));
-	INIT_LIST_HEAD(&(s_ctrl->i2c_data.poweron_reg_settings.list_head));
-	INIT_LIST_HEAD(&(s_ctrl->i2c_data.poweroff_reg_settings.list_head));
 	INIT_LIST_HEAD(&(s_ctrl->i2c_data.read_settings.list_head));
-
+#ifdef ENABLE_SENSOR_POWER_UP_IN_ADVANCE
+        mutex_init(&(s_ctrl->sensor_power_state_mutex));
+        mutex_init(&(s_ctrl->sensor_initsetting_mutex));
+        s_ctrl->sensor_power_state = CAM_SENSOR_POWER_OFF;
+        s_ctrl->sensor_initsetting_state = CAM_SENSOR_SETTING_WRITE_INVALID;
+#endif
 	for (i = 0; i < MAX_PER_FRAME_ARRAY; i++)
 		INIT_LIST_HEAD(&(s_ctrl->i2c_data.per_frame[i].list_head));
 
