@@ -10,7 +10,9 @@
 
 #include "fingerprint_detect.h"
 int fp_version;
+int fp_dtsi_product = 0;
 
+#ifndef OEM_TARGET_PRODUCT_BILLIE2
 static int fingerprint_detect_request_named_gpio(
 		struct fingerprint_detect_data *fp_detect,
 		const char *label, int *gpio)
@@ -33,6 +35,7 @@ static int fingerprint_detect_request_named_gpio(
 	dev_info(dev, "%s - gpio: %d\n", label, *gpio);
 	return 0;
 }
+#endif
 
 static ssize_t sensor_version_get(struct device *device,
 			     struct device_attribute *attribute,
@@ -43,7 +46,26 @@ static ssize_t sensor_version_get(struct device *device,
 	return scnprintf(buffer, PAGE_SIZE, "%i\n", fp_detect->sensor_version);
 }
 
-static DEVICE_ATTR(sensor_version, S_IRUSR, sensor_version_get, NULL);
+static ssize_t sensor_version_set(struct device *device,
+				struct device_attribute *attribute,
+				const char *buffer, size_t count)
+{
+	int ret;
+	struct fingerprint_detect_data *fp_detect = dev_get_drvdata(device);
+	if (count < 32)
+	{
+		ret = kstrtoint(buffer, 10, &(fp_detect->sensor_version));
+		if (ret) {
+			printk("%s: kstrtoint error return %d\n", __func__, ret);
+			return -1;
+		}
+	} else {
+		pr_info("%s write a wrong number!!!\n", __func__);
+	}
+	return count;
+}
+
+static DEVICE_ATTR(sensor_version, S_IRUSR|S_IWUSR, sensor_version_get, sensor_version_set);
 
 static struct attribute *attributes[] = {
 	&dev_attr_sensor_version.attr,
@@ -115,16 +137,17 @@ static int fingerprint_detect_probe(struct platform_device *pdev)
 		rc = -EINVAL;
 		goto exit;
 	}
-
+#ifndef OEM_TARGET_PRODUCT_BILLIE2
 	rc = fp_pinctrl_init(fp_detect);
-	//	if (rc)
-	//	goto exit;
+	if (rc)
+		goto exit;
 
 	rc = fingerprint_detect_request_named_gpio(fp_detect, "fp-gpio-id0", &fp_detect->id0_gpio);
 	if (gpio_is_valid(fp_detect->id0_gpio)) {
 	dev_err(dev, "%s: gpio_is_valid(fp_detect->id0_gpio=%d)\n",
 		__func__, fp_detect->id0_gpio);
 	}
+#endif
 /*
 	rc = fingerprint_detect_request_named_gpio(fp_detect,"fp-gpio-id1", &fp_detect->id1_gpio);
 	if (gpio_is_valid(fp_detect->id1_gpio)) {
@@ -137,9 +160,10 @@ static int fingerprint_detect_probe(struct platform_device *pdev)
 		dev_err(dev, "could not create sysfs\n");
 		goto exit;
 	}
-
+#ifndef OEM_TARGET_PRODUCT_BILLIE2
 	id0 = gpio_get_value(fp_detect->id0_gpio);
 //	id1 = gpio_get_value(fp_detect->id1_gpio);
+#endif
 
 	/**
 	*				ID0(GPIO90)	ID1(GPIO21)
@@ -149,25 +173,72 @@ static int fingerprint_detect_probe(struct platform_device *pdev)
 	*	qualcomm4*9		1			1
 	*/
 
+	/**
+	*               ID1(GPIO55) ID2(GPIO53)
+	*   egis520      *           *
+	*/
 	pr_info("%s: %d\n", __func__, id0);
-//	id0 = 1;
+
+#ifdef OEM_TARGET_PRODUCT_BILLIE
+	if (id0) {
+		 /*
+		push_component_info(FINGERPRINTS,
+			"egis520", "egis");
+		fp_detect->sensor_version = 0x520;
+		*/
+		pr_info("%s:  the N10 id0 is %d\n", __func__, id0);
+	}
+#else
 	if (id0) {
 		push_component_info(FINGERPRINTS,
-			"goodix9558", "goodix");
-		fp_detect->sensor_version = 0x04;
+			"goodix9608", "goodix");
+		fp_detect->sensor_version = 0x07;
 	} else if (!id0) {
 		push_component_info(FINGERPRINTS,
-			"sileadgsl7000", "silead");
-		fp_detect->sensor_version = 0x05;
+			"goodix9608", "goodix");
+		fp_detect->sensor_version = 0x9638;
 	}/* else if (!id0 && !id1) {
 		push_component_info(FINGERPRINTS,
 			"qbt1000", "qualcomm");
 		fp_detect->sensor_version = 0x06;
 	}
 */
-//	fp_detect->sensor_version = 0x04;
-	if (of_property_read_bool(fp_detect->dev->of_node, "oneplus,goodix9558"))
+#endif
+
+	if (of_property_read_bool(fp_detect->dev->of_node, "oneplus,19805")){
+		fp_dtsi_product = 19805;
+		if(id0){
+			fp_detect->sensor_version = 0x9678;
+		}else{
+			fp_detect->sensor_version = 0x9638;
+		}
+	}
+
+	if (of_property_read_bool(fp_detect->dev->of_node, "oneplus,20801")){
+		fp_dtsi_product = 20801;
 		fp_detect->sensor_version = 0x04;
+	}
+
+	if (of_property_read_bool(fp_detect->dev->of_node, "oneplus,20889")) {
+		fp_dtsi_product = 20889;
+		push_component_info(FINGERPRINTS,
+			"egis520", "egis");
+		fp_detect->sensor_version = 0x520;
+	}
+
+	if (of_property_read_bool(fp_detect->dev->of_node, "oneplus,20881")) {
+		fp_dtsi_product = 20881;
+		push_component_info(FINGERPRINTS,
+			"egis521", "egis");
+		fp_detect->sensor_version = 0x521;
+	}
+
+	if (of_property_read_bool(fp_detect->dev->of_node, "oneplus,20813")) {
+		fp_dtsi_product = 20813;
+		push_component_info(FINGERPRINTS,
+			"goodix9578", "goodix");
+		fp_detect->sensor_version = 0x9578;
+	}
 	fp_version = fp_detect->sensor_version;
 	dev_info(dev, "%s: success\n", __func__);
 exit:

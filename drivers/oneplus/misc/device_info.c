@@ -106,31 +106,32 @@ static int is_na_board(void)
 /*device info init to black*/
 static void  pstore_device_info_init(void )
 {
-	size_t oldsize;
-	size_t size = 0;
-	struct ramoops_context *cxt = NULL;
-	struct pstore_record record;
+    size_t oldsize;
+    size_t size =0;
 
-	if (psinfo == NULL)
-		return;
+    struct ramoops_context *cxt = psinfo->data;
+    struct pstore_record record;
 
-	cxt = psinfo->data;
-	size = cxt->device_info_size;
+    if (psinfo == NULL)
+        return;
+
+    size = cxt->device_info_size;
 
 	pstore_record_init(&record, psinfo);
 	record.type = PSTORE_TYPE_DEVICE_INFO;
-	record.buf = psinfo->buf;
-	record.size = size;
+    record.buf = psinfo->buf;
+    record.size = size;
 
-	oldsize = psinfo->bufsize;
+    oldsize = psinfo->bufsize;
 
-	if (size > psinfo->bufsize)
-		size = psinfo->bufsize;
 
-	memset(record.buf, ' ', size);
-	psinfo->write(&record);
+    if (size > psinfo->bufsize)
+        size = psinfo->bufsize;
+
+    memset(record.buf, ' ', size);
+    psinfo->write(&record);
   
-	psinfo->bufsize = oldsize;
+    psinfo->bufsize = oldsize ;
 }
 
 static void pstore_write_device_info(const char *s, unsigned c)

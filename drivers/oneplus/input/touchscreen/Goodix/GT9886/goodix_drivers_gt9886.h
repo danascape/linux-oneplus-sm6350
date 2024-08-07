@@ -1,5 +1,6 @@
 /**************************************************************
- * Copyright (c)  2008- 2030  OP Mobile communication Corp.ltd.
+ * Copyright (c)  2008- 2030  Oppo Mobile communication Corp.ltd.
+ * VENDOR_EDIT
  * File       : goodix_drivers_gt9886.h
  * Description: header file for Goodix GT9886 driver
  * Version   : 1.0
@@ -114,6 +115,7 @@
 #define GTP_CMD_GESTURE_MASK            0x46
 
 //config cmd
+#define COMMAND_CLEAR_UPDATE            0x50
 #define COMMAND_START_SEND_LARGE_CFG    0x80
 #define COMMAND_START_SEND_SMALL_CFG    0x81
 #define COMMAND_SEND_CFG_PREPARE_OK     0x82
@@ -154,8 +156,9 @@
 #define LANDSCAPE_SCREEN_90                             90
 #define LANDSCAPE_SCREEN_270                    270
 
-#define FINGERPRINT_DOWN_DETECT                 1
-#define FINGERPRINT_UP_DETECT                   0
+//commented to make compilation successful (1-9-2020)
+//#define FINGERPRINT_DOWN_DETECT                 1
+//#define FINGERPRINT_UP_DETECT                   0
 
 //debug info define
 #define SENSOR_NUM_ADDR                 0x5473
@@ -450,6 +453,7 @@ struct goodix_register {
 	uint16_t GTP_REG_WAKEUP_GESTURE;        /*gesture type*/
 	uint16_t GTP_REG_GESTURE_COOR;          /*gesture point data*/
 	uint16_t GTP_REG_CMD;                   /*recevice cmd from host*/
+	uint16_t GTP_REG_CMD1;
 	uint16_t GTP_REG_RQST;                  /*request from ic*/
 	uint16_t GTP_REG_NOISE_DETECT;          /*noise state*/
 	uint16_t GTP_REG_ESD_WRITE;             /*esd state write*/
