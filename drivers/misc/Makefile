@@ -78,3 +78,7 @@ obj-$(CONFIG_QTI_XR_SMRTVWR_MISC) += qxr-stdalonevwr.o
 obj-$(CONFIG_FPR_FPC)		+= fpr_FingerprintCard/
 obj-y                           += qrc/
 obj-$(CONFIG_KINECTICS_XR_NORDIC) += kxrctrl/
+
+#+bug 550748,zhanghaibin1@wt,20200509,Add hardware_info
+obj-y += hardware_info.o
+#-bug 550748,zhanghaibin1@wt,20200509,Add hardware_info

@@ -146,6 +146,9 @@ struct qpnp_qg {
 	bool			tcss_active;
 	bool			bass_active;
 	bool			first_profile_load;
+#ifndef OEM_TARGET_PRODUCT_EBBA
+	bool                    use_external_fg;
+#endif
 	int			charge_status;
 	int			charge_type;
 	int			chg_iterm_ma;
