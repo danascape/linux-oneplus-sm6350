@@ -1,12 +1,9 @@
 /***************************************************
  * File:synaptics_common.h
- * Copyright (c)  2008- 2030  op Mobile communication Corp.ltd.
+ * VENDOR_EDIT
  * Description:
  *             synaptics common driver
  * Version:1.0:
- * Date created:2016/09/02
- * Author: Tong.han@Bsp.Driver
- * TAG: BSP.TP.Init
  * *
  * -------------- Revision History: -----------------
  *  <author >  <data>  <version>  <desc>
