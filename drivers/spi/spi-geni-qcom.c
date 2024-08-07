@@ -1905,8 +1905,6 @@ static int spi_geni_suspend(struct device *dev)
 	struct spi_master *spi = get_spi_master(dev);
 	struct spi_geni_master *geni_mas = spi_master_get_devdata(spi);
 
-	struct spi_master *spi = get_spi_master(dev);
-	struct spi_geni_master *geni_mas = spi_master_get_devdata(spi);
 	/*
 	if (!pm_runtime_status_suspended(dev)) {
 		GENI_SE_ERR(geni_mas->ipc, true, dev,

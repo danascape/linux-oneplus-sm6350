@@ -2015,7 +2015,7 @@ static void socinfo_print(void)
 		break;
 
 	case SOCINFO_VERSION(0, 16):
-		pr_info("v%u.%u, id=%u, ver=%u.%u, raw_id=%u, raw_ver=%u, hw_plat=%u, hw_plat_ver=%u\n accessory_chip=%u, hw_plat_subtype=%u, pmic_model=%u, pmic_die_revision=%u foundry_id=%u serial_number=%u num_pmics=%u chip_family=0x%x raw_device_family=0x%x raw_device_number=0x%x nproduct_id=0x%x num_clusters=0x%x ncluster_array_offset=0x%x num_defective_parts=0x%x ndefective_parts_array_offset=0x%x nmodem_supported=0x%x feature_code=0x%x pcode=0x%x board_pressure_support=%u sku=%s\n",
+		pr_info("v%u.%u, id=%u, ver=%u.%u, raw_id=%u, raw_ver=%u, hw_plat=%u, hw_plat_ver=%u\n accessory_chip=%u, hw_plat_subtype=%u, pmic_model=%u, pmic_die_revision=%u foundry_id=%u serial_number=%u num_pmics=%u chip_family=0x%x raw_device_family=0x%x raw_device_number=0x%x nproduct_id=0x%x num_clusters=0x%x ncluster_array_offset=0x%x num_subset_parts=0x%x nsubset_parts_array_offset=0x%x nmodem_supported=0x%x feature_code=0x%x pcode=0x%x board_pressure_support=%u sku=%s\n",
 			f_maj, f_min, socinfo->v0_1.id, v_maj, v_min,
 			socinfo->v0_2.raw_id, socinfo->v0_2.raw_version,
 			socinfo->v0_3.hw_platform,
@@ -2033,8 +2033,8 @@ static void socinfo_print(void)
 			socinfo->v0_13.nproduct_id,
 			socinfo->v0_14.num_clusters,
 			socinfo->v0_14.ncluster_array_offset,
-			socinfo->v0_14.num_defective_parts,
-			socinfo->v0_14.ndefective_parts_array_offset,
+			socinfo->v0_14.num_subset_parts,
+			socinfo->v0_14.nsubset_parts_array_offset,
 			socinfo->v0_15.nmodem_supported,
 			socinfo->v0_16.feature_code,
 			socinfo->v0_16.pcode,
