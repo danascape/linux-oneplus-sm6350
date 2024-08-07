@@ -1296,66 +1296,6 @@
 			};
 		};
 
-		wsa_swr_clk_pin {
-			wsa_swr_clk_sleep: wsa_swr_clk_sleep {
-				mux {
-					pins = "gpio10";
-					function = "func2";
-				};
-
-				config {
-					pins = "gpio10";
-					drive-strength = <2>;
-					input-enable;
-					bias-pull-down;
-				};
-			};
-
-			wsa_swr_clk_active: wsa_swr_clk_active {
-				mux {
-					pins = "gpio10";
-					function = "func2";
-				};
-
-				config {
-					pins = "gpio10";
-					drive-strength = <10>;
-					slew-rate = <3>;
-					bias-disable;
-				};
-			};
-		};
-
-		wsa_swr_data_pin {
-			wsa_swr_data_sleep: wsa_swr_data_sleep {
-				mux {
-					pins = "gpio11";
-					function = "func2";
-				};
-
-				config {
-					pins = "gpio11";
-					drive-strength = <2>;
-					input-enable;
-					bias-pull-down;
-				};
-			};
-
-			wsa_swr_data_active: wsa_swr_data_active {
-				mux {
-					pins = "gpio11";
-					function = "func2";
-				};
-
-				config {
-					pins = "gpio11";
-					drive-strength = <10>;
-					slew-rate = <3>;
-					bias-bus-hold;
-				};
-			};
-		};
-
 		tx_swr_clk_sleep: tx_swr_clk_sleep {
 			mux {
 				pins = "gpio0";
