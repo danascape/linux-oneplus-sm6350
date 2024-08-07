@@ -46,7 +46,12 @@
 #define TX_MACRO_DMIC_UNMUTE_DELAY_MS	40
 #define TX_MACRO_AMIC_UNMUTE_DELAY_MS	100
 #define TX_MACRO_DMIC_HPF_DELAY_MS	300
+#ifdef OEM_TARGET_PRODUCT_EBBA
+#define TX_MACRO_AMIC_HPF_DELAY_MS	100
+#else
 #define TX_MACRO_AMIC_HPF_DELAY_MS	300
+#endif
+
 
 static int tx_unmute_delay = TX_MACRO_DMIC_UNMUTE_DELAY_MS;
 module_param(tx_unmute_delay, int, 0664);
@@ -500,6 +505,9 @@ static void tx_macro_tx_hpf_corner_freq_callback(struct work_struct *work)
 				hpf_cut_off_freq << 5);
 		snd_soc_component_update_bits(component, hpf_gate_reg,
 						0x03, 0x02);
+#ifdef OEM_TARGET_PRODUCT_EBBA
+		usleep_range(50, 55);
+#endif
 		/* Add delay between toggle hpf gate based on sample rate */
 		switch (tx_priv->pcm_rate[hpf_work->decimator]) {
 		case 0:
