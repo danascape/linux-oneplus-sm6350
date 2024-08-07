@@ -19,7 +19,7 @@
 			reg = <0x100 0x100>;
 		};
 
-		pm7250b_pon: qcom,power-on@800 {
+		qcom,power-on@800 {
 			compatible = "qcom,qpnp-power-on";
 			reg = <0x800 0x100>;
 		};
@@ -34,8 +34,6 @@
 				3500000 3000000 2500000 2000000 1500000
 				1000000 500000>;
 			qcom,pmic-revid = <&pm7250b_revid>;
-			qcom,hvdcp2-max-icl-ua = <2000000>;
-			qcom,hvdcp2-12v-max-icl-ua = <1500000>;
 
 			qcom,chgr@1000 {
 				reg = <0x1000 0x100>;
@@ -206,9 +204,9 @@
 					  "msg-rx-discarded",
 					  "fr-swap";
 
-			qcom,default-sink-caps = <5000 3000>, /* 5V @ 3A */
-						 <9000 3000>, /* 9V @ 3A */
-						 <12000 2250>; /* 12V @ 2.25A */
+			qcom,default-sink-caps = <5000 3000>; /* 5V @ 3A */
+						/* <9000 3000>, *//* 9V @ 3A */
+						/* <12000 2250>; *//* 12V @ 2.25A */
 		};
 
 		pm7250b_tz: qcom,temp-alarm@2400 {
@@ -369,6 +367,7 @@
 				qcom,ratiometric;
 				qcom,hw-settle-time = <200>;
 				qcom,pre-scaling = <1 1>;
+				qcom,lut-index = <2>;
 			};
 
 			bat_therm_400k@6a {
@@ -632,7 +631,7 @@
 
 		trips {
 			soc_trip:soc-trip {
-				temperature = <10>;
+				temperature = <5>;
 				hysteresis = <0>;
 				type = "passive";
 			};

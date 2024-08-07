@@ -39,7 +39,7 @@
 			qcom,pon_2 {
 				qcom,pon-type = <PON_POWER_ON_TYPE_RESIN>;
 				qcom,pull-up;
-				linux,code = <KEY_VOLUMEDOWN>;
+				linux,code = <KEY_VOLUMEUP>;
 			};
 		};
 
