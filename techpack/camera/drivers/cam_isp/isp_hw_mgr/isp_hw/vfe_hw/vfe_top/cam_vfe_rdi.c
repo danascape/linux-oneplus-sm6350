@@ -14,7 +14,6 @@
 #include "cam_cdm_util.h"
 #include "cam_irq_controller.h"
 #include "cam_tasklet_util.h"
-#include "cam_cpas_api.h"
 
 struct cam_vfe_mux_rdi_data {
 	void __iomem                                *mem_base;
@@ -303,12 +302,17 @@ static int cam_vfe_rdi_resource_start(
 		}
 	}
 
-	if (!rdi_res->rdi_only_ctx)
-		goto end;
+//case 04712337, 2020.08.06, for 64M QCFA pic stuck
+	if (rdi_res->rdi_only_ctx)
+		rdi_irq_mask[0] |=
+			(rsrc_data->reg_data->sof_irq_mask);
 
-	rdi_irq_mask[0] =
-		(rsrc_data->reg_data->reg_update_irq_mask |
-			rsrc_data->reg_data->sof_irq_mask);
+	if (rdi_res->rdi_only_last_res)
+		rdi_irq_mask[0] |=
+			(rsrc_data->reg_data->reg_update_irq_mask);
+
+	if (!rdi_res->rdi_only_last_res && !rdi_res->rdi_only_ctx)
+		goto end;
 
 	CAM_DBG(CAM_ISP, "RDI%d irq_mask 0x%x",
 		rdi_res->res_id - CAM_ISP_HW_VFE_IN_RDI0,
@@ -540,10 +544,6 @@ static int cam_vfe_rdi_handle_irq_bottom_half(void *handler_priv,
 			rdi_priv->event_cb(rdi_priv->priv,
 			CAM_ISP_HW_EVENT_ERROR,
 			(void *)&evt_info);
-
-		cam_cpas_get_camnoc_fifo_fill_level_info(
-			soc_private->cpas_version,
-			soc_private->cpas_handle);
 		cam_cpas_log_votes();
 	}
 end:

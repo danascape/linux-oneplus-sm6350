@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _CAM_ISP_HW_H_
@@ -113,10 +112,6 @@ enum cam_isp_hw_cmd_type {
 	CAM_ISP_HW_CMD_FE_TRIGGER_CMD,
 	CAM_ISP_HW_CMD_CSID_CHANGE_HALT_MODE,
 	CAM_ISP_HW_CMD_GET_IRQ_REGISTER_DUMP,
-	CAM_ISP_HW_CMD_CSID_CLOCK_DUMP,
-	CAM_ISP_HW_CMD_SET_NUM_OF_ACQUIRED_RESOURCE,
-	CAM_ISP_HW_CMD_GET_NUM_OF_ACQUIRED_RESOURCE,
-	CAM_ISP_HW_CMD_IS_CONSUMED_ADDR_SUPPORT,
 	CAM_ISP_HW_CMD_MAX,
 };
 
@@ -149,6 +144,7 @@ struct cam_isp_hw_cmd_query {
  *                                schedule IRQ events related to this resource
  * @irq_handle:                   handle returned on subscribing for IRQ event
  * @rdi_only_ctx:                 resource belong to rdi only context or not
+ * @rdi_only_last_res:            Last resource belong to rdi only context
  * @init:                         function pointer to init the HW resource
  * @deinit:                       function pointer to deinit the HW resource
  * @start:                        function pointer to start the HW resource
@@ -169,6 +165,8 @@ struct cam_isp_resource_node {
 	void                          *tasklet_info;
 	int                            irq_handle;
 	int                            rdi_only_ctx;
+//case 04712337, 2020.08.06, for 64M QCFA pic stuck
+	int                            rdi_only_last_res;
 
 	int (*init)(struct cam_isp_resource_node *rsrc_node,
 		void *init_args, uint32_t arg_size);
@@ -191,7 +189,7 @@ struct cam_isp_resource_node {
  * @res_id:         Unique resource ID
  * @hw_idx:         IFE hw index
  * @err_type:       Error type if any
- * @reg_val:        Any critical register value captured during irq handling
+ * @th_reg_val:     Any critical register value captured during th
  *
  */
 struct cam_isp_hw_event_info {
@@ -199,7 +197,7 @@ struct cam_isp_hw_event_info {
 	uint32_t                       res_id;
 	uint32_t                       hw_idx;
 	uint32_t                       err_type;
-	uint32_t                       reg_val;
+	uint32_t                       th_reg_val;
 };
 
 /*
@@ -221,7 +219,7 @@ struct cam_isp_hw_cmd_buf_update {
 /*
  * struct cam_isp_hw_get_wm_update:
  *
- * @Brief:             Get cmd buffer for WM updates.
+ * @Brief:         Get cmd buffer for WM updates.
  *
  * @ image_buf:    image buffer address array
  * @ image_buf_offset: image buffer address offset array
