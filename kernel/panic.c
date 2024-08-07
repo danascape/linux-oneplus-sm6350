@@ -32,6 +32,7 @@
 #include <linux/sysfs.h>
 #include <asm/sections.h>
 #include <soc/qcom/minidump.h>
+#include <linux/oem/project_info.h>
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -198,6 +199,7 @@ void panic(const char *fmt, ...)
 	int state = 0;
 	int old_cpu, this_cpu;
 	bool _crash_kexec_post_notifiers = crash_kexec_post_notifiers;
+	char *function_name;
 
 	if (panic_on_warn) {
 		/*
@@ -245,9 +247,20 @@ void panic(const char *fmt, ...)
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
 	dump_stack_minidump(0);
+
+#ifdef CONFIG_PANIC_FLUSH
+	if (!oem_get_download_mode())
+		panic_flush_device_cache(2000);
+#endif
+
 	if (vendor_panic_cb)
 		vendor_panic_cb(0);
+
 	pr_emerg("Kernel panic - not syncing: %s\n", buf);
+	function_name = parse_function_builtin_return_address(
+			(unsigned long)__builtin_return_address(0));
+	save_dump_reason_to_smem(buf, function_name);
+
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
 	 * Avoid nested stack-dumping if a panic occurs during oops processing

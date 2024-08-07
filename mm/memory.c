@@ -2663,6 +2663,9 @@ static vm_fault_t do_wp_page(struct vm_fault *vmf)
 		     mm_tlb_flush_pending(vmf->vma->vm_mm)))
 		flush_tlb_page(vmf->vma, vmf->address);
 
+#ifdef CONFIG_MEMPLUS
+	count_vm_event(WPFAULT);
+#endif
 	vmf->page = vm_normal_page(vma, vmf->address, vmf->orig_pte);
 	if (!vmf->page) {
 		/*
@@ -2941,6 +2944,9 @@ vm_fault_t do_swap_page(struct vm_fault *vmf)
 		/* Had to read the page from swap area: Major fault */
 		ret = VM_FAULT_MAJOR;
 		count_vm_event(PGMAJFAULT);
+#ifdef CONFIG_MEMPLUS
+		count_vm_event(SWAPMAJFAULT);
+#endif
 		count_memcg_event_mm(vma->vm_mm, PGMAJFAULT);
 	} else if (PageHWPoison(page)) {
 		/*
@@ -3090,6 +3096,10 @@ static vm_fault_t do_anonymous_page(struct vm_fault *vmf)
 	struct page *page;
 	vm_fault_t ret = 0;
 	pte_t entry;
+
+#ifdef CONFIG_MEMPLUS
+	count_vm_event(ANONFAULT);
+#endif
 
 	/* File mapping without ->vm_ops ? */
 	if (vmf->vma_flags & VM_SHARED)
@@ -3787,12 +3797,22 @@ static vm_fault_t do_fault(struct vm_fault *vmf)
 
 			pte_unmap_unlock(vmf->pte, vmf->ptl);
 		}
-	} else if (!(vmf->flags & FAULT_FLAG_WRITE))
+	} else if (!(vmf->flags & FAULT_FLAG_WRITE)) {
 		ret = do_read_fault(vmf);
-	else if (!(vmf->vma_flags & VM_SHARED))
+#ifdef CONFIG_MEMPLUS
+		count_vm_event(READFAULT);
+#endif
+	} else if (!(vma->vm_flags & VM_SHARED)) {
 		ret = do_cow_fault(vmf);
-	else
+#ifdef CONFIG_MEMPLUS
+		count_vm_event(COWFAULT);
+#endif
+	} else {
 		ret = do_shared_fault(vmf);
+#ifdef CONFIG_MEMPLUS
+		count_vm_event(SHAREDFAULT);
+#endif
+	}
 
 	/* preallocated pagetable is unused: free it */
 	if (vmf->prealloc_pte) {
@@ -4022,8 +4042,12 @@ static vm_fault_t handle_pte_fault(struct vm_fault *vmf)
 			return do_fault(vmf);
 	}
 
-	if (!pte_present(vmf->orig_pte))
+	if (!pte_present(vmf->orig_pte)) {
+#ifdef CONFIG_MEMPLUS
+		count_vm_event(SWAPFAULT);
+#endif
 		return do_swap_page(vmf);
+	}
 
 	if (pte_protnone(vmf->orig_pte) && vma_is_accessible(vmf->vma))
 		return do_numa_page(vmf);
