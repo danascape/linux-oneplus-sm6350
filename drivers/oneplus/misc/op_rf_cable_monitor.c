@@ -23,6 +23,7 @@
 #include <linux/module.h>
 #include <linux/of_gpio.h>
 #include <linux/oem/op_rf_cable_monitor.h>
+#include <linux/oem/boot_mode.h>
 #include <linux/oem/project_info.h>
 #include <linux/platform_device.h>
 #include <linux/kdev_t.h>
@@ -33,11 +34,14 @@ static struct class *rf_uevent_class;
 static struct device *rf_uevent_device;
 static struct project_info *project_info_desc;
 
-#define EU_GPIO_NUM 3
-static char board_id[64];
-static int eu_gpio[EU_GPIO_NUM];
-
+#ifdef OEM_TARGET_PRODUCT_EBBA
+#define CABLE_GPIO_NUM 1
+#elif defined CONFIG_ARCH_LITO
+#define CABLE_GPIO_NUM 3
+#else
 #define CABLE_GPIO_NUM 4
+#endif
+
 struct cable_data {
 	int irq[CABLE_GPIO_NUM];
 	int cable_gpio[CABLE_GPIO_NUM];
@@ -45,7 +49,7 @@ struct cable_data {
 	struct delayed_work work;
 	struct workqueue_struct *wqueue;
 	struct device *dev;
-	struct wakeup_source wl;
+	struct wakeup_source *wl;
 	int rf_v2;
 	int rf_v3;
 	int rf_v3_pre;
@@ -111,32 +115,21 @@ int get_all_gpio_val(void)
 {
 	int i = 0;
 	int gpiostate = 0;
-	if (!strcmp(board_id, "S86260AA1")) {
-		//NA
-		for (i = 0; i < 3; i++)
-			gpiostate = gpiostate +
-				(gpio_get_value(rf_cable_data->cable_gpio[i]) * local_pow(10, 3 - i - 1));
-	} else if (!strcmp(board_id, "S86261AA1")) {
-		//EU
-		for (i = 0; i < EU_GPIO_NUM; i++)
-			gpiostate = gpiostate + (gpio_get_value(eu_gpio[i]) * local_pow(10, EU_GPIO_NUM - i - 1));
-	} else {
-		// can't get board_id
-		pr_err("%s: get board id fail!\n", __func__);
-	}
-	return gpiostate;
-}
+	for(i = 0; i< CABLE_GPIO_NUM; i++)
+		gpiostate = gpiostate + (gpio_get_value(rf_cable_data->cable_gpio[i]) * local_pow(10, CABLE_GPIO_NUM - i - 1));
 
-static int __init get_board_id(char *str)
-{
-	if (!str)
-		return -EINVAL;
-	memset(board_id, 0, sizeof(board_id));
-	strlcpy(board_id, str, sizeof(board_id));
-	pr_err("rf get boardid:%s\n", board_id);
-	return 0;
+	#ifndef OEM_TARGET_PRODUCT_EBBA
+	/*only 19811 china and 19821 china use ANT6(gpio109)*/
+	if((get_prj_version() == 12 && get_rf_version() == 11) 
+		||(get_prj_version() == 11 && get_rf_version() == 11)
+		||(get_prj_version() == 14) || (get_prj_version() == 15))
+		return gpiostate;
+	else
+		return gpiostate - gpiostate % 10;
+	#else
+		return gpiostate;
+	#endif
 }
-__setup("androidboot.board_id=", get_board_id);
 
 static void irq_cable_enable(int enable)
 {
@@ -225,7 +218,7 @@ irqreturn_t cable_interrupt(int irq, void *_dev)
 
 	rf_cable_data->gpio_state = get_all_gpio_val();
 
-	__pm_wakeup_event(&rf_cable_data->wl,
+	__pm_wakeup_event(rf_cable_data->wl,
 		msecs_to_jiffies(CABLE_WAKELOCK_HOLD_TIME));
 	queue_delayed_work(rf_cable_data->wqueue,
 		&rf_cable_data->work, msecs_to_jiffies(500));
@@ -553,7 +546,7 @@ static int op_rf_cable_probe(struct platform_device *pdev)
 		}
 	}
 
-	wakeup_source_init(&rf_cable_data->wl,"rf_cable_wake_lock");
+	rf_cable_data->wl = wakeup_source_register(rf_cable_data->dev,"rf_cable_wake_lock");
 	spin_lock_init(&rf_cable_data->lock);
 
 	for(i = 0; i < CABLE_GPIO_NUM; i++) {
@@ -586,14 +579,6 @@ static int op_rf_cable_probe(struct platform_device *pdev)
 		pr_err("requested irq %d\n", rf_cable_data->irq[i]);
 		enable_irq_wake(rf_cable_data->irq[i]);
 	}
-	//all are one for eu
-	for (i = EU_GPIO_NUM ; i >= 1 ; i--)
-		eu_gpio[EU_GPIO_NUM-i] = rf_cable_data->irq[i];
-
-	eu_gpio[EU_GPIO_NUM-i] = '\0';
-	for (i = 0 ; i <= EU_GPIO_NUM ; i++)
-		pr_err("%s eu_gpio[%d]=%d ,\n", __func__, i, eu_gpio[i]);
-
 	create_rf_cable_procfs();
 
 	cable_state = get_all_gpio_val();
