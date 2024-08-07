@@ -1131,7 +1131,7 @@ static ssize_t tzdbgfs_read_unencrypted(struct file *file, char __user *buf,
 	size_t count, loff_t *offp)
 {
 	int len = 0;
-        int tz_id = PDE_DATA(file_inode(file));
+        int tz_id = *(int *)PDE_DATA(file_inode(file));
 
 	if (tz_id == TZDBG_BOOT || tz_id == TZDBG_RESET ||
 		tz_id == TZDBG_INTERRUPT || tz_id == TZDBG_GENERAL ||
