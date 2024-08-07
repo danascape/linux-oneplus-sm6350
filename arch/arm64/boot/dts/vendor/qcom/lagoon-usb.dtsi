@@ -50,7 +50,7 @@
 			0x144 /* GSI_RING_BASE_ADDR_H */
 			0x1a4>; /* GSI_IF_STS */
 		qcom,dwc-usb3-msm-tx-fifo-size = <21288>;
-		qcom,pm-qos-latency = <61>; /* CPU0-WFI-LVL latency +1 */
+		qcom,pm-qos-latency = <21>; /* CPU0-WFI-LVL latency +1 */
 
 		qcom,gsi-disable-io-coherency;
 
@@ -92,9 +92,10 @@
 			snps,has-lpm-erratum;
 			snps,hird-threshold = /bits/ 8 <0x10>;
 			snps,usb3-u1u2-disable;
+			snps,xhci-imod-value = <160>;/*hguan add*/
 			usb-core-id = <0>;
 			tx-fifo-resize;
-			maximum-speed = "super-speed";
+			maximum-speed = "high-speed";
 			dr_mode = "drd";
 		};
 		qcom,usbbam@a704000 {
@@ -172,11 +173,11 @@
 			 0x0a 0x184 /* PLL_LOCK_DELAY */
 			 0x19 0xb4  /* PLL_DIGITAL_TIMERS_TWO */
 			 0x40 0x194 /* PLL_BIAS_CONTROL_1 */
-			 0x22 0x198 /* PLL_BIAS_CONTROL_2 */
+			 0x12 0x198 /* PLL_BIAS_CONTROL_2 */
 			 0x21 0x214 /* PWR_CTRL2 */
 			 0x08 0x220 /* IMP_CTRL1 */
 			 0x58 0x224 /* IMP_CTRL2 */
-			 0x45 0x240 /* TUNE1 */
+			 0x47 0x240 /* TUNE1 */
 			 0x29 0x244 /* TUNE2 */
 			 0xca 0x248 /* TUNE3 */
 			 0x04 0x24c /* TUNE4 */
@@ -193,12 +194,12 @@
 			0x0a 0x184 /* PLL_LOCK_DELAY */
 			0x19 0xb4  /* PLL_DIGITAL_TIMERS_TWO */
 			0x40 0x194 /* PLL_BIAS_CONTROL_1 */
-			0x22 0x198 /* PLL_BIAS_CONTROL_2 */
+			0x17 0x198 /* PLL_BIAS_CONTROL_2 */
 			0x21 0x214 /* PWR_CTRL2 */
 			0x08 0x220 /* IMP_CTRL1 */
 			0x58 0x224 /* IMP_CTRL2 */
-			0x45 0x240 /* TUNE1 */
-			0x29 0x244 /* TUNE2 */
+			0x47 0x240 /* TUNE1 */
+			0x2b 0x244 /* TUNE2 */
 			0xca 0x248 /* TUNE3 */
 			0x04 0x24c /* TUNE4 */
 			0x03 0x250 /* TUNE5 */
