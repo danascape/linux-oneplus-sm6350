@@ -1,4 +1,4 @@
-ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
+ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY_NOT_OEM),y)
         dtbo-$(CONFIG_ARCH_KONA) += \
                 kona-cdp-overlay.dtbo \
                 kona-cdp-lcd-overlay.dtbo \
@@ -29,6 +29,37 @@ kona-xrfusion-ult-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
 kona-arglass-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
 kona-xrsku4-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
 kona-hdk-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+else
+ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
+        dtbo-$(CONFIG_ARCH_KONA) += \
+                instantnoodlep-overlay-evb.dtbo \
+                instantnoodlep-overlay-t0.dtbo \
+                instantnoodlep-overlay-evt1.dtbo \
+                instantnoodlep-overlay-dvt.dtbo \
+                instantnoodle-overlay-t0.dtbo \
+                instantnoodle-overlay-evt1.dtbo \
+                instantnoodle-overlay-dvt.dtbo \
+                instantnoodlev-overlay-t0.dtbo \
+                instantnoodlev-overlay-evt1.dtbo \
+                instantnoodlev-overlay-dvt.dtbo \
+                kebab-overlay.dtbo \
+                lemonades-overlay.dtbo
+
+instantnoodlep-overlay-evb.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+instantnoodlep-overlay-t0.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+instantnoodlep-overlay-evt1.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+instantnoodlep-overlay-dvt.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+
+instantnoodle-overlay-t0.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+instantnoodle-overlay-evt1.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+instantnoodle-overlay-dvt.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+
+instantnoodlev-overlay-t0.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+instantnoodlev-overlay-evt1.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+instantnoodlev-overlay-dvt.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+
+kebab-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
+lemonades-overlay.dtbo-base := kona.dtb kona-v2.dtb kona-v2.1.dtb
 else
 dtb-$(CONFIG_ARCH_KONA) += kona-rumi.dtb \
         kona-mtp.dtb \
@@ -71,7 +102,7 @@ dtb-$(CONFIG_ARCH_KONA) += kona-rumi.dtb \
         kona-v2.1-iot-rb5.dtb \
         kona-7230-iot-rb5.dtb \
         kona-7230m-iot-rb5.dtb
-
+endif
 endif
 
 ifeq ($(CONFIG_BUILD_ARM64_DT_OVERLAY),y)
@@ -128,14 +159,14 @@ dtbo-$(CONFIG_ARCH_LAGOON) += \
 		lagoon-mtp-usbc-overlay.dtbo \
 		lagoon-cdp-overlay.dtbo \
 		lagoon-atp-overlay.dtbo \
-		lagoon-qrd-overlay.dtbo
+		billie8-qrd-overlay.dtbo
 
 lagoon-rumi-overlay.dtbo-base := lagoon.dtb
 lagoon-mtp-overlay.dtbo-base := lagoon.dtb
 lagoon-mtp-usbc-overlay.dtbo-base := lagoon.dtb
 lagoon-cdp-overlay.dtbo-base := lagoon.dtb
 lagoon-atp-overlay.dtbo-base := lagoon.dtb
-lagoon-qrd-overlay.dtbo-base := lagoon.dtb
+billie8-qrd-overlay.dtbo-base := lagoon.dtb
 else
 dtb-$(CONFIG_ARCH_LAGOON) += \
 		lagoon-rumi.dtb \

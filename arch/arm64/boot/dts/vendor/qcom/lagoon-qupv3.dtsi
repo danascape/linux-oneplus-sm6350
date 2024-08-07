@@ -88,7 +88,7 @@
 		dmas = <&gpi_dma0 0 0 1 64 0>,
 			<&gpi_dma0 1 0 1 64 0>;
 		dma-names = "tx", "rx";
-		status = "disabled";
+		status = "ok";
 	};
 
 	qupv3_se1_4uart: qcom,qup_uart@884000 {
@@ -291,7 +291,7 @@
 	};
 
 	qupv3_se9_2uart: qcom,qup_uart@98c000 {
-		compatible = "qcom,msm-geni-console";
+		compatible = "qcom,msm-geni-console-oem";
 		reg = <0x98c000 0x4000>;
 		reg-names = "se_phys";
 		clock-names = "se-clk", "m-ahb", "s-ahb";
