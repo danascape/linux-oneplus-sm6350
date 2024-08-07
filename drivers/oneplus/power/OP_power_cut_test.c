@@ -22,7 +22,6 @@
 #include <soc/qcom/scm.h>
 
 
-// martin.li@coreBsp,2020.1.25 add for power cut testing 
 int power_cut_mode, power_cut_delay;
 struct delayed_work power_cut_delayed_work;
 static void __iomem *op_msm_ps_hold;

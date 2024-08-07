@@ -1,6 +1,7 @@
 /***************************************************
  * File:goodix_tool.h
- * Copyright (c)  2008- 2030  OP Mobile communication Corp.ltd.
+ * VENDOR_EDIT
+ * Copyright (c)  2008- 2030  Oppo Mobile communication Corp.ltd.
  * Description:
  *             goodix debugging tool code
  * Version:1.0:

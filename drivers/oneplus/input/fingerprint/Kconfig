@@ -9,6 +9,11 @@ menuconfig INPUT_FINGERPRINT
 
 if INPUT_FINGERPRINT
 
+source "drivers/oneplus/input/fingerprint/egis520/Kconfig"
+#a mecro(FINGERPRINT_ET520) defined in et520/Kconfig
+source "drivers/oneplus/input/fingerprint/et520/Kconfig"
+
+
 config FINGERPRINT_DETECT
 	tristate "fingerprint detect support"
 	depends on SPI_MASTER

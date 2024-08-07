@@ -78,51 +78,65 @@ EXPORT_SYMBOL(parse_function_builtin_return_address);
 
 void save_dump_reason_to_smem(char *info, char *function_name)
 {
-	int length = 0;
+	int strl = 0, strl1 = 0, length = 0;
 	size_t size;
-	static int flag;
-	char *buf1;
+	static int flag = 0;
+	char buf[7], *buf1;
 	struct pt_regs *regs;
 	char *caller_function_name;
 
 	/* Make sure save_dump_reason_to_smem() is not
-	 * called infinite times by nested panic caller fns etc
-	 */
+	called infinite times by nested panic caller fns etc*/
 	if (flag > 1)
 		return;
 
-	dp_info = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_DUMP_INFO, &size);
+	dp_info = qcom_smem_get(QCOM_SMEM_HOST_ANY,SMEM_DUMP_INFO,&size);
 
 	if (IS_ERR_OR_NULL(dp_info))
 		pr_debug("%s: get dp_info failure\n", __func__);
 	else {
-		pr_debug("%s: info : %s\n", __func__, info);
+		pr_debug("%s: info : %s\n",__func__, info);
 
-		if (info != NULL) {
-			strlcat(dp_info->dump_reason, info, DUMP_REASON_SIZE);
-		}
-		if (function_name != NULL) {
-			strlcat(dp_info->dump_reason, "\r\n", DUMP_REASON_SIZE);
-			strlcat(dp_info->dump_reason, function_name, DUMP_REASON_SIZE);
-			pr_debug("%s: function caused panic :%s\n", __func__,
-				function_name);
-		}
+		if (info) {
+			strl   = strlen(info)+1;
+			strl   = strl  <  DUMP_REASON_SIZE ? strl : DUMP_REASON_SIZE;
+			if ((strlen(dp_info->dump_reason) + strl) < DUMP_REASON_SIZE)
+				strncat(dp_info->dump_reason, info, strl);
+		} else
+			pr_debug("%s: panic info is NULL\n", __func__);
+
+		if (function_name) {
+			strl1  = strlen(function_name)+1;
+			strl1  = strl1 <  DUMP_REASON_SIZE ? strl1: DUMP_REASON_SIZE;
+			if ((strlen(dp_info->dump_reason) + strl1 + 3) < DUMP_REASON_SIZE) {
+				strncat(dp_info->dump_reason, "\r\n", 2);
+				strncat(dp_info->dump_reason, function_name, strl1);
+			}
+		} else
+			pr_debug("%s: function name is NULL\n", __func__);
+
 		caller_function_name = parse_function_builtin_return_address(
 			(unsigned long)__builtin_return_address(0));
 		if ((strcmp(caller_function_name, "panic") == 0)) {
 			regs = (struct pt_regs *)panic_info;
 			if (regs) {
 				buf1 = parse_regs_pc(regs->pc, &length);
-				strlcat(dp_info->dump_reason, "\r\nPC at:", DUMP_REASON_SIZE);
-				strlcat(dp_info->dump_reason, buf1, DUMP_REASON_SIZE);
-				strncat(dp_info->dump_reason, "\r\n", DUMP_REASON_SIZE);
+				length = length < DUMP_REASON_SIZE ? length: DUMP_REASON_SIZE;
+				if ((strlen(dp_info->dump_reason) + length + 12) < DUMP_REASON_SIZE) {
+					strncat(dp_info->dump_reason,"\r\n", 2);
+					strncpy(buf, "PC at:", 7);
+					strncat(dp_info->dump_reason, buf, 7);
+					strncat(dp_info->dump_reason, buf1, length);
+					strncat(dp_info->dump_reason, "\r\n", 2);
+				}
 			}
 		}
-		pr_debug("\r%s: dump_reason : %s\n", __func__,
-			dp_info->dump_reason);
-		save_dump_reason_to_device_info(dp_info->dump_reason);
-		flag++;
 	}
+
+	pr_debug("\r%s: dump_reason : %s strl=%d function caused panic :%s strl1=%d \n", __func__,
+			dp_info->dump_reason, strl, function_name, strl1);
+	save_dump_reason_to_device_info(dp_info->dump_reason);
+	flag++;
 }
 
 uint8 get_secureboot_fuse_status(void)
@@ -507,7 +521,7 @@ struct cpu_list cpu_list_msm[] = {
     {339, "SM8150 "},
     {356, "SM8250 "},
     {400, "SM7250 "},
-    {434, "SM6350 "},
+    {459, "SM7225 "},
     {0, "Unknown"},
 };
 
@@ -572,9 +586,37 @@ struct a_board_version a_board_version_string_arry_gpio[]={
 
 struct main_board_info main_board_info_check[]={
 	/*  prj      hw       rf        version*/
-	{   11     ,  11     , NONDEFINE      ,"20801 T0"},
-	{   11     ,  12     , NONDEFINE      ,"20801 EVT1"},
-	/* Add the prj, hw, rf as per the project stage */
+	{   11     ,  11     , NONDEFINE      ,"19811 T0"},
+	{   11     ,  12     , NONDEFINE      ,"19811 EVT1"},
+	{   11     ,  13     , NONDEFINE      ,"19811 EVT2"},
+	{   11     ,  14     , NONDEFINE      ,"19811 DVT"},
+	{   11     ,  15     , NONDEFINE      ,"19811 PVT/MP"},
+	{   11     ,  51     , NONDEFINE      ,"19811 EVT2 SEC"},
+	{   11     ,  52     , NONDEFINE      ,"19811 DVT SEC"},
+	{   11     ,  53     , NONDEFINE      ,"19811 PVT/MP SEC"},
+
+	{   12     ,  11     , 12     ,"19855 T0"},
+	{   12     ,  12     , 12     ,"19855 EVT1"},
+	{   12     ,  13     , 12     ,"19855 EVT2"},
+	{   12     ,  14     , 12     ,"19855 DVT"},
+	{   12     ,  15     , 12     ,"19855 PVT/MP"},
+
+
+	{   12     ,  11     , NONDEFINE      ,"19821 T0"},
+	{   12     ,  12     , NONDEFINE      ,"19821 EVT1"},
+	{   12     ,  13     , NONDEFINE      ,"19821 EVT2"},
+	{   12     ,  14     , NONDEFINE      ,"19821 DVT"},
+	{   12     ,  54     , NONDEFINE      ,"19821 EVT2 SEC"},
+	{   12     ,  55     , NONDEFINE      ,"19821 DVT SEC"},
+	{   12     ,  15     , NONDEFINE      ,"19821 PVT/MP"},
+
+	{   13     ,  11     , NONDEFINE      ,"19867 T0"},
+	{   13     ,  12     , NONDEFINE      ,"19867 EVT1"},
+	{   13     ,  13     , NONDEFINE      ,"19867 EVT2"},
+	{   13     ,  14     , NONDEFINE      ,"19867 DVT"},
+	{   13     ,  15     , NONDEFINE      ,"19867 PVT/MP"},
+
+	{   11     ,  11     ,NONDEFINE,"19811 T0"},
 	{NONDEFINE,NONDEFINE,NONDEFINE,"Unknown"}
 };
 
@@ -584,16 +626,30 @@ uint32 get_hw_version(void)
 
     project_info_desc = qcom_smem_get(QCOM_SMEM_HOST_ANY,SMEM_PROJECT_INFO, &size);
 
-    if (IS_ERR_OR_NULL(project_info_desc)) {
+    if (IS_ERR_OR_NULL(project_info_desc))
         pr_err("%s: get project_info failure\n", __func__);
-	project_info_desc = NULL;
-    }
     else {
         pr_err("%s: hw version: %d\n", __func__,
             project_info_desc->hw_version);
         return project_info_desc->hw_version;
     }
     return 0;
+}
+
+char *get_project_name(void)
+{
+    size_t size;
+
+    project_info_desc = qcom_smem_get(QCOM_SMEM_HOST_ANY,SMEM_PROJECT_INFO, &size);
+
+    if (IS_ERR_OR_NULL(project_info_desc))
+        pr_err("%s: get project_info failure\n", __func__);
+    else {
+        pr_err("%s: project_name: %s\n", __func__,
+            project_info_desc->project_name);
+        return project_info_desc->project_name;
+    }
+    return NULL;
 }
 
 void dump_reason_init_smem(void)
@@ -624,17 +680,17 @@ int __init init_project_info(void)
 
     if (IS_ERR_OR_NULL(project_info_desc)) {
         pr_err("%s: get project_info failure\n", __func__);
-	project_info_desc = NULL;
         return -1;
     }
-    pr_err("%s: project_name: %s hw_version: %d prj=%d rf_v1: %d rf_v2: %d: rf_v3: %d  paltform_id:%d\n",
+    pr_err("%s: project_name: %s hw_version: %d prj=%d rf_v1: %d rf_v2: %d: rf_v3: %d  paltform_id:%d a_board_version:%d\n",
         __func__, project_info_desc->project_name,
         project_info_desc->hw_version,
         project_info_desc->prj_version,
         project_info_desc->rf_v1,
         project_info_desc->rf_v2,
         project_info_desc->rf_v3,
-        project_info_desc->platform_id);
+        project_info_desc->platform_id,
+        project_info_desc->a_board_version);
 
 
     p = &main_board_info_check[ARRAY_SIZE(main_board_info_check)-1].version_name[0];
@@ -662,6 +718,12 @@ int __init init_project_info(void)
 
     snprintf(rf_version, sizeof(rf_version),  " %d",project_info_desc->rf_v1);
     push_component_info(RF_VERSION, rf_version, mainboard_manufacture);
+
+    a_board_val = project_info_desc->a_board_version;
+    pr_err("a_board_val: %d\n", a_board_val);
+    snprintf(Aboard_version, sizeof(Aboard_version),  " %d",a_board_val);
+    pr_err("sub board info: %s\n", Aboard_version);
+    push_component_info(ABOARD, Aboard_version, mainboard_manufacture);
 
     get_ddr_manufacture_name();
 

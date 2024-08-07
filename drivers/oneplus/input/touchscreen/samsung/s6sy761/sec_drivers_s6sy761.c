@@ -27,7 +27,7 @@
 extern int tp_register_times;
 extern struct touchpanel_data *g_tp;
 #define PM_QOS_VALUE_TP 200
-extern struct pm_qos_request pm_qos_req_stp;
+struct pm_qos_request pm_qos_req_stp;
 
 /****************** Start of Log Tag Declear and level define*******************************/
 #define TPD_DEVICE "sec-s6sy761"
@@ -146,6 +146,37 @@ static int sec_enable_wireless_charge_mode(struct chip_data_s6sy761 *chip_info, 
 
 }
 
+static int sec_enable_reverse_wireless_charge(struct chip_data_s6sy761 *chip_info, bool enable)
+{
+	int ret = -1;
+
+	if (enable) {
+		ret = touch_i2c_write_byte(chip_info->client, SEC_NOISE_MODE, 0x11);//enter noise mode
+	} else {
+		ret = touch_i2c_write_byte(chip_info->client, SEC_NOISE_MODE, 0x10);//enter normal mode
+		ret = touch_i2c_write_byte(chip_info->client, SEC_NOISE_MODE, 0x00);//start normal mode
+	}
+
+	TPD_INFO("%s: state: %d %s!\n", __func__, enable, ret < 0 ? "failed" : "success");
+	return ret;
+
+}
+
+static int sec_enable_wet_mode(struct chip_data_s6sy761 *chip_info, bool enable)
+{
+	int ret = -1;
+
+	if (enable) {
+		g_tp->wet_mode_status = 1;
+		ret = touch_i2c_write_byte(chip_info->client, SEC_WET_MODE, 1);
+		TPD_INFO("enter wet mode, close it\n");
+	} else {
+		g_tp->wet_mode_status = 0;
+		ret = touch_i2c_write_byte(chip_info->client, SEC_WET_MODE, 0);
+	}
+
+	return 0;
+}
 static int sec_audio_noise_mode(struct chip_data_s6sy761 *chip_info, bool enable)
 {
 	int ret = -1;
@@ -305,12 +336,21 @@ static int sec_limit_switch_mode(struct chip_data_s6sy761 *chip_info, bool enabl
 		ret = touch_i2c_write_block(chip_info->client, SEC_CMD_SCREEN_ORIEN, 3, cmd);
 	}
 	//dead zone type 1
-	buf[2] = 0x00;
+	if ((g_tp->limit_switch == 1) || (g_tp->limit_switch == 3))	//landscape
+		buf[2] = g_tp->dead_zone_l;	//default x=15px
+	else	//portrait
+		buf[2] = g_tp->dead_zone_p;	//default x=15px
+
 	ret = touch_i2c_write_block(chip_info->client, SEC_CMD_GRIP_PARA, 5, buf);
 	//dead zone type 2
 	buf[0] = 0x01;
-	buf[2] = 0x1E;//x=30px
-	buf[4] = 0x82;//y=130px
+	if ((g_tp->limit_switch == 1) || (g_tp->limit_switch == 3)) {	//landscape
+		buf[2] = 0x50;//x=80px
+		buf[4] = 0x50;//y=80px
+	} else {	//portrait
+		buf[2] = 0x1E;//x=30px
+		buf[4] = 0x82;//y=130px
+	}
 	ret = touch_i2c_write_block(chip_info->client, SEC_CMD_GRIP_PARA, 5, buf);
 	//long press reject zone
 	buf[0] = 0x02;
@@ -960,7 +1000,8 @@ static fw_check_state sec_fw_check(void *chip_data, struct resolution_info *reso
 
 static fw_update_state sec_fw_update(void *chip_data, const struct firmware *fw, bool force)
 {
-	int i = 0, ret = 0;
+	u32 i = 0;
+	int ret = 0;
 	u8 buf[4] = {0};
 	u8 *fd = NULL;
 	uint8_t cal_status = 0;
@@ -998,7 +1039,13 @@ static fw_update_state sec_fw_update(void *chip_data, const struct firmware *fw,
 	touch_i2c_read_block(chip_info->client, SEC_READ_CONFIG_VERSION, 4, buf);
 	config_version_in_ic = (buf[0] << 24) | (buf[1] << 16) | (buf[2] << 8) | buf[3];
 	TPD_INFO("config version in bin is 0x%04x, config version in ic is 0x%04x\n", config_version_in_bin, config_version_in_ic);
-
+	msleep(10);
+	ret = touch_i2c_read_byte(chip_info->client, SEC_STATUS);//check wet mode status
+	TPD_INFO("ret is %d\n", ret);
+	if (ret == 1) {
+		TPD_INFO("enter water mode\n");
+		g_tp->wet_mode_status = 1;
+	}
 	ret = touch_i2c_read_byte(chip_info->client, SEC_READ_BOOT_STATUS);
 	if (ret == SEC_STATUS_BOOT_MODE) {
 		force = 1;
@@ -1024,7 +1071,7 @@ static fw_update_state sec_fw_update(void *chip_data, const struct firmware *fw,
 	fd += sizeof(sec_fw_header);
 	for (i = 0; i < fw_hd->num_chunk; i++) {
 		fw_ch = (sec_fw_chunk *)fd;
-		TPD_INFO("update %d chunk(addr: 0x%08x, size: 0x%08x)\n", i, fw_ch->addr, fw_ch->size);
+		TPD_INFO("update %u chunk(addr: 0x%08x, size: 0x%08x)\n", i, fw_ch->addr, fw_ch->size);
 		if (fw_ch->signature != SEC_FW_CHUNK_SIGN) {
 			TPD_INFO("%s: firmware chunk error(0x%08x)\n", __func__, fw_ch->signature);
 			return FW_UPDATE_ERROR;
@@ -1050,6 +1097,7 @@ static fw_update_state sec_fw_update(void *chip_data, const struct firmware *fw,
 		TPD_INFO("calibration %s\n", (ret < 0) ? "failed" : "success");
 	}
 	TPD_INFO("%s: update success\n", __func__);
+
 	return FW_UPDATE_SUCCESS;
 }
 
@@ -1075,8 +1123,10 @@ static u8 sec_trigger_reason(void *chip_data, int gesture_enable, int is_suspend
 		}
 		if (i2c_error_num == 4) {
 			TPD_INFO("%s: read one event failed\n", __func__);
-			sec_reset(chip_info);
-			operate_mode_switch(g_tp);
+			if (!g_tp->is_suspended) {//suspend not allow reset.
+				sec_reset(chip_info);
+				operate_mode_switch(g_tp);
+			}
 			pm_qos_remove_request(&pm_qos_req_stp);
 			return IRQ_IGNORE;
 		}
@@ -1150,7 +1200,7 @@ static u8 sec_trigger_reason(void *chip_data, int gesture_enable, int is_suspend
 				tp_info.y = (p_event_status->status_data_3 <<4)|((p_event_status->status_data_4 >> 0) & 0x0F);//2728;
 				tp_info.touch_state = 1;
 				g_tp->touchold_event = 1;
-				//opticalfp_irq_handler(&tp_info);
+				opticalfp_irq_handler(&tp_info);
 				TPD_INFO("%s: tp_info.x = %d, tp_info.y= %d\n",__func__, tp_info.x, tp_info.y);
 			} else if (p_event_status->status_data_1 == 0) {
 				tp_info.x = (p_event_status->status_data_2 << 4)|((p_event_status->status_data_4 >> 4) & 0x0F); //720;
@@ -1158,7 +1208,7 @@ static u8 sec_trigger_reason(void *chip_data, int gesture_enable, int is_suspend
 				tp_info.touch_state = 0;
 				g_tp->touchold_event = 0;
 				TPD_INFO("%s: tp_info.x = %d, tp_info.y= %d\n",__func__, tp_info.x, tp_info.y);
-				//opticalfp_irq_handler(&tp_info);
+				opticalfp_irq_handler(&tp_info);
 			}
 			TPD_INFO("%s: touch_hold status %d\n",__func__, p_event_status->status_data_1);
 			pm_qos_remove_request(&pm_qos_req_stp);
@@ -1173,6 +1223,9 @@ static u8 sec_trigger_reason(void *chip_data, int gesture_enable, int is_suspend
 		}
 		if ((p_event_status->stype == TYPE_STATUS_EVENT_VENDOR_INFO) && (p_event_status->status_id == SEC_TS_VENDOR_ACK_NOISE_STATUS_NOTI)) {
 			chip_info->touch_noise_status = !!p_event_status->status_data_1;
+			TPD_INFO("first event: 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x, 0x%02x\n", \
+			chip_info->first_event[0], chip_info->first_event[1], chip_info->first_event[2], chip_info->first_event[3],\
+			chip_info->first_event[4], chip_info->first_event[5], chip_info->first_event[6], chip_info->first_event[7]);
 			TPD_INFO("%s: TSP NOISE MODE %s[%d]\n",
 					__func__,chip_info->touch_noise_status == 0 ? "OFF" : "ON",
 					p_event_status->status_data_1);
@@ -1588,6 +1641,16 @@ static int sec_mode_switch(void *chip_data, work_mode mode, bool flag)
 				TPD_INFO("%s: switch audio noise mode : %d failes\n", __func__, flag);
 			break;
 
+		case MODE_REVERSE_WIRELESS_CHARGE:
+			ret = sec_enable_reverse_wireless_charge(chip_info, flag);
+			if (ret < 0)
+				TPD_INFO("%s: switch reverse wireless mode : %d failes\n", __func__, flag);
+			break;
+		case MODE_WET_DETECT:
+			ret = sec_enable_wet_mode(chip_info, flag);
+			if (ret < 0)
+				TPD_INFO("%s: change wet mode : %d failes\n", __func__, flag);
+			break;
 		default:
 			TPD_INFO("%s: Wrong mode.\n", __func__);
 	}
@@ -3476,12 +3539,10 @@ static struct i2c_driver tp_i2c_driver =
 static int __init tp_driver_init(void)
 {
 	TPD_INFO("%s is called\n", __func__);
-/*
 	if (i2c_add_driver(&tp_i2c_driver)!= 0) {
 		TPD_INFO("unable to add i2c driver.\n");
 		return -1;
 	}
-*/
 	return 0;
 }
 
