@@ -451,6 +451,9 @@ static int __kprobes do_page_fault(unsigned long addr, unsigned int esr,
 	tsk = current;
 	mm  = tsk->mm;
 
+#ifdef CONFIG_CGROUP_IOLIMIT
+	task_set_in_pagefault(tsk);
+#endif
 	/*
 	 * If we're in an interrupt or have no user context, we must not take
 	 * the fault.
@@ -514,10 +517,18 @@ retry:
 	if (fault_signal_pending(fault, regs)) {
 		if (!user_mode(regs))
 			goto no_context;
+#ifdef CONFIG_CGROUP_IOLIMIT
+		task_clear_in_pagefault(tsk);
+#endif
 		return 0;
 	}
 
 	if (fault & VM_FAULT_RETRY) {
+
+#ifdef CONFIG_MEMPLUS
+		count_vm_event(RETRYPAGE);
+#endif
+
 		if (mm_flags & FAULT_FLAG_ALLOW_RETRY) {
 			mm_flags |= FAULT_FLAG_TRIED;
 			goto retry;
@@ -563,6 +574,9 @@ retry:
 		 * oom-killed).
 		 */
 		pagefault_out_of_memory();
+#ifdef CONFIG_CGROUP_IOLIMIT
+		task_clear_in_pagefault(tsk);
+#endif
 		return 0;
 	}
 
@@ -597,10 +611,16 @@ retry:
 	}
 
 	__do_user_fault(&si, esr);
+#ifdef CONFIG_CGROUP_IOLIMIT
+	task_clear_in_pagefault(tsk);
+#endif
 	return 0;
 
 no_context:
 	__do_kernel_fault(addr, esr, regs);
+#ifdef CONFIG_CGROUP_IOLIMIT
+	task_clear_in_pagefault(tsk);
+#endif
 	return 0;
 }
 
