@@ -5123,8 +5123,8 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 				largest_gap_gpu = vma->rb_glfragment_gap;
 			}
 
-			if (private->pid != current_pid) {
-				current_pid = private->pid;
+			if ((int) private->pid != current_pid) {
+				current_pid = (int) private->pid;
 				kgsl_send_uevent_notify(device, current->group_leader->comm,
 					len, mm->total_vm, largest_gap_cpu, largest_gap_gpu);
 			}
