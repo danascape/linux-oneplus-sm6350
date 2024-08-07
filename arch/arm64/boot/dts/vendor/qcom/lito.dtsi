@@ -500,6 +500,11 @@
 			label = "dfps_data_region";
 		};
 
+		disp_rdump_memory: disp_rdump_region@0xa0000000 {
+			reg = <0x0 0xA0000000 0x0 0x02300000>;
+			label = "disp_rdump_region";
+		};
+
 		dump_mem: mem_dump_region {
 			compatible = "shared-dma-pool";
 			alloc-ranges = <0x0 0x00000000 0x0 0xffffffff>;
@@ -1410,7 +1415,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU0>;
-		status = "disabled";
 	};
 
 	jtag_mm1: jtagmm@7140000 {
@@ -1422,7 +1426,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU1>;
-		status = "disabled";
 	};
 
 	jtag_mm2: jtagmm@7240000 {
@@ -1434,7 +1437,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU2>;
-		status = "disabled";
 	};
 
 	jtag_mm3: jtagmm@7340000 {
@@ -1446,7 +1448,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU3>;
-		status = "disabled";
 	};
 
 	jtag_mm4: jtagmm@7440000 {
@@ -1458,7 +1459,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU4>;
-		status = "disabled";
 	};
 
 	jtag_mm5: jtagmm@7540000 {
@@ -1470,7 +1470,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU5>;
-		status = "disabled";
 	};
 
 	jtag_mm6: jtagmm@7640000 {
@@ -1482,7 +1481,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU6>;
-		status = "disabled";
 	};
 
 	jtag_mm7: jtagmm@7740000 {
@@ -1494,7 +1492,6 @@
 		clock-names = "core_clk";
 
 		qcom,coresight-jtagmm-cpu = <&CPU7>;
-		status = "disabled";
 	};
 
 	keepalive_opp_table: keepalive-opp-table {
@@ -1591,7 +1588,6 @@
 		compatible = "qcom,aop-qmp-clk";
 		mboxes = <&qmp_aop 0>;
 		mbox-names = "qdss_clk";
-		qcom,clk-stop-bimc-log;
 		#clock-cells = <1>;
 	};
 
@@ -3869,6 +3865,7 @@
 };
 
 #include "lito-qupv3.dtsi"
+#include "lito-coresight.dtsi"
 #include "camera/lito-camera.dtsi"
 #include "lito-audio.dtsi"
 
@@ -3903,21 +3900,21 @@
 };
 
 &L1P {
-	regulator-max-microvolt = <1056000>;
+	regulator-max-microvolt = <1200000>;
 	/* Reduced the headroom by 16mV for AHC */
-	qcom,min-dropout-voltage = <209000>;
+	qcom,min-dropout-voltage = <100000>;
 };
 
 &L2P {
-	regulator-max-microvolt = <1104000>;
+	regulator-max-microvolt = <1200000>;
 	/* Reduced the headroom by 16mV for AHC */
-	qcom,min-dropout-voltage = <209000>;
+	qcom,min-dropout-voltage = <100000>;
 };
 
 &L3P {
 	regulator-min-microvolt = <2800000>;
-	regulator-max-microvolt = <2800000>;
-	qcom,min-dropout-voltage = <136000>;
+	regulator-max-microvolt = <3400000>;
+	qcom,min-dropout-voltage = <200000>;
 };
 
 &L4P {
