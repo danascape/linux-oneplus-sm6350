@@ -104,11 +104,6 @@ module_param_named(pcc_always_on, pccore_always_on, int, 0664);
 /* pmu */
 static int perf_ready = -1;
 
-#ifdef CONFIG_ONEPLUS_FG_OPT
-unsigned int ht_fuse_boost = 0;
-module_param_named(fuse_boost, ht_fuse_boost, uint, 0664);
-#endif
-
 /* perf notify */
 static struct ai_parcel parcel;
 static struct workqueue_struct *ht_perf_workq;
