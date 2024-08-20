@@ -2304,9 +2304,6 @@ static __latent_entropy struct task_struct *copy_process(
 #ifdef CONFIG_TPP
 		p->tpp_flag = 0;
 #endif
-#ifdef CONFIG_ONEPLUS_FG_OPT
-		p->fuse_boost = 0;
-#endif
 #ifdef CONFIG_IM
 		im_tsk_init_flag((void *) p);
 #endif
