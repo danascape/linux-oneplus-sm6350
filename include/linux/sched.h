@@ -1635,10 +1635,6 @@ struct task_struct {
 	bool utask_slave;
 #endif
 
-#ifdef CONFIG_ONEPLUS_FG_OPT
-	int fuse_boost;
-#endif
-
 #ifdef CONFIG_ONEPLUS_HEALTHINFO
 /*2020-05-27, add for stuck monitor*/
 	int stuck_trace;
