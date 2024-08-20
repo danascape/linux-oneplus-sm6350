@@ -36,10 +36,6 @@
 #include <oneplus/houston/houston_helper.h>
 #endif
 
-#ifdef CONFIG_ONEPLUS_FG_OPT
-extern unsigned int ht_fuse_boost;
-#endif
-
 #ifdef CONFIG_IM
 #include <linux/oem/im.h>
 #endif
@@ -7228,12 +7224,6 @@ static int get_start_cpu(struct task_struct *p)
 			rd->max_cap_orig_cpu : rd->mid_cap_orig_cpu;
 		return start_cpu;
 	}
-#endif
-
-#ifdef CONFIG_ONEPLUS_FG_OPT
-	if (ht_fuse_boost && p->fuse_boost)
-		return rd->mid_cap_orig_cpu == -1 ?
-			rd->max_cap_orig_cpu : rd->mid_cap_orig_cpu;
 #endif
 
 	if (task_skip_min || boosted) {

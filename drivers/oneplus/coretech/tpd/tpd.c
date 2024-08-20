@@ -227,15 +227,6 @@ bool is_dynamic_tpd_task(struct task_struct *tsk)
 			}
 #endif
 
-#ifdef CONFIG_ONEPLUS_FG_OPT
-			/* fuse related thread of media provider */
-			if (tsk->fuse_boost) {
-				tsk->dtpd = 1; /* dynamic tpd */
-				tsk->tpd = group->decision;
-				ret = true;
-				break;
-			}
-#endif
 			/* re-tag missed thread, only one name with  one thread */
 			spin_lock(&group->miss_list_lock);
 			if (group->not_yet > 0) {
