@@ -20,8 +20,8 @@ extern int opc_cpu_active(int cpu);
 extern int opc_cpu_isolated(int cpu);
 bool opc_check_uxtop_cpu(int uxtop, int cpu);
 bool opc_utask_slave(struct task_struct *t);
-extern unsigned long __init opc_get_orig_capacity(int cpu);
-extern void __exit opc_exit_module(void);
+extern unsigned long opc_get_orig_capacity(int cpu);
+extern void opc_exit_module(void);
 extern void opc_set_boost(unsigned int val);
 #define UTASK_SLAVE(t) opc_utask_slave(t)
 
