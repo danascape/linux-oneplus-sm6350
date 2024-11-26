@@ -142,7 +142,7 @@ bool opc_check_uxtop_cpu(int uxtop, int cpu)
 }
 EXPORT_SYMBOL(opc_check_uxtop_cpu);
 
-unsigned long __init opc_get_orig_capacity(int cpu)
+unsigned long opc_get_orig_capacity(int cpu)
 {
 	return cpu_rq(cpu)->cpu_capacity_orig;
 }
@@ -154,7 +154,7 @@ bool opc_utask_slave(struct task_struct *t)
 }
 EXPORT_SYMBOL(opc_utask_slave);
 
-void __exit opc_exit_module(void)
+void opc_exit_module(void)
 {
 	uxcore_api.opc_binder_pass_t = NULL;
 	uxcore_api.is_opc_task_t = NULL;
