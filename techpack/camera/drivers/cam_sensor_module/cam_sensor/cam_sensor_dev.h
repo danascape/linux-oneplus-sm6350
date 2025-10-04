@@ -38,6 +38,8 @@
 #define SENSOR_DRIVER_I2C "i2c_camera"
 #define CAMX_SENSOR_DEV_NAME "cam-sensor-driver"
 
+#define ENABLE_SENSOR_POWER_UP_IN_ADVANCE
+
 enum cam_sensor_state_t {
 	CAM_SENSOR_INIT,
 	CAM_SENSOR_ACQUIRE,
@@ -45,6 +47,17 @@ enum cam_sensor_state_t {
 	CAM_SENSOR_START,
 };
 
+#ifdef ENABLE_SENSOR_POWER_UP_IN_ADVANCE
+enum cam_sensor_power_state {
+        CAM_SENSOR_POWER_OFF,
+        CAM_SENSOR_POWER_ON,
+};
+
+enum cam_sensor_setting_state {
+        CAM_SENSOR_SETTING_WRITE_INVALID,
+        CAM_SENSOR_SETTING_WRITE_SUCCESS,
+};
+#endif
 /**
  * struct intf_params
  * @device_hdl: Device Handle
@@ -85,8 +98,6 @@ struct intf_params {
  * @bob_pwm_switch: Boolean flag to switch into PWM mode for BoB regulator
  * @last_flush_req: Last request to flush
  * @pipeline_delay: Sensor pipeline delay
- * @force_low_priority_for_init_setting: Using low priority queue to send
- *     init setting
  */
 struct cam_sensor_ctrl_t {
 	char device_name[CAM_CTX_DEV_NAME_MAX_LENGTH];
@@ -114,7 +125,13 @@ struct cam_sensor_ctrl_t {
 	uint32_t last_flush_req;
 	uint16_t pipeline_delay;
 	int32_t open_cnt;
-	bool force_low_priority_for_init_setting;
+#ifdef ENABLE_SENSOR_POWER_UP_IN_ADVANCE
+	struct mutex sensor_power_state_mutex;
+	struct mutex sensor_initsetting_mutex;
+	enum cam_sensor_power_state sensor_power_state;
+	enum cam_sensor_setting_state sensor_initsetting_state;
+	struct task_struct *sensor_open_thread;
+#endif
 };
 
 #endif /* _CAM_SENSOR_DEV_H_ */
