@@ -110,7 +110,7 @@ int cam_ois_driver_soc_init(struct cam_ois_ctrl_t *o_ctrl)
 			o_ctrl->cci_num = CCI_DEVICE_0;
 
 		o_ctrl->io_master_info.cci_client->cci_device = o_ctrl->cci_num;
-		CAM_DBG(CAM_OIS, "cci-device %d", o_ctrl->cci_num, rc);
+		CAM_DBG(CAM_OIS, "cci-device %d", o_ctrl->cci_num);
 
 	}
 
