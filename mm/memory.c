@@ -3802,7 +3802,7 @@ static vm_fault_t do_fault(struct vm_fault *vmf)
 #ifdef CONFIG_MEMPLUS
 		count_vm_event(READFAULT);
 #endif
-	} else if (!(vmf->vm_flags & VM_SHARED)) {
+	} else if (!(vma->vm_flags & VM_SHARED)) {
 		ret = do_cow_fault(vmf);
 #ifdef CONFIG_MEMPLUS
 		count_vm_event(COWFAULT);
