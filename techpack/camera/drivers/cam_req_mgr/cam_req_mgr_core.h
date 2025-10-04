@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- * Copyright (c) 2022 Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef _CAM_REQ_MGR_CORE_H_
 #define _CAM_REQ_MGR_CORE_H_
@@ -14,11 +13,12 @@
 #define CAM_REQ_MGR_MAX_LINKED_DEV     16
 #define MAX_REQ_SLOTS                  48
 
-#define CAM_REQ_MGR_WATCHDOG_TIMEOUT       5000
+//+bug BILLIE8-2297, qinduilin.wt, modify, 2020.06.16, for Camera-ProMode-AE manual control
+#define CAM_REQ_MGR_WATCHDOG_TIMEOUT       30000
+//-bug BILLIE8-2297, qinduilin.wt, modify, 2020.06.16, for Camera-ProMode-AE manual control
 #define CAM_REQ_MGR_WATCHDOG_TIMEOUT_MAX   50000
 #define CAM_REQ_MGR_SCHED_REQ_TIMEOUT      1000
 #define CAM_REQ_MGR_SIMULATE_SCHED_REQ     30
-#define CAM_REQ_MGR_DEFAULT_HDL_VAL        0
 
 #define FORCE_DISABLE_RECOVERY  2
 #define FORCE_ENABLE_RECOVERY   1
@@ -33,11 +33,9 @@
 
 #define SYNC_LINK_SOF_CNT_MAX_LMT 1
 
-#define MAXIMUM_LINKS_PER_SESSION  7
+#define MAXIMUM_LINKS_PER_SESSION  4
 
 #define MAXIMUM_RETRY_ATTEMPTS 2
-
-#define MINIMUM_WORKQUEUE_SCHED_TIME_IN_MS 5
 
 #define VERSION_1  1
 #define VERSION_2  2
@@ -355,7 +353,6 @@ struct cam_req_mgr_connected_device {
  * @trigger_cnt          : trigger count value per device initiating the trigger
  * @skip_wd_validation   : skip initial frames crm_wd_timer validation in the
  *                         case of long exposure use case
- * @last_applied_jiffies : Record the jiffies of last applied req
  */
 struct cam_req_mgr_core_link {
 	int32_t                              link_hdl;
@@ -389,7 +386,7 @@ struct cam_req_mgr_core_link {
 	bool                                 dual_trigger;
 	uint32_t    trigger_cnt[CAM_REQ_MGR_MAX_TRIGGERS];
 	bool                                 skip_wd_validation;
-	uint64_t                             last_applied_jiffies;
+
 };
 
 /**

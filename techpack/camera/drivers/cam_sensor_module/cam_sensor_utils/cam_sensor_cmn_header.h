@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _CAM_SENSOR_CMN_HEADER_
@@ -153,8 +153,6 @@ enum cam_sensor_packet_opcodes {
 	CAM_SENSOR_PACKET_OPCODE_SENSOR_CONFIG,
 	CAM_SENSOR_PACKET_OPCODE_SENSOR_STREAMOFF,
 	CAM_SENSOR_PACKET_OPCODE_SENSOR_READ,
-	CAM_SENSOR_PACKET_OPCODE_SENSOR_POWERON_REG,
-	CAM_SENSOR_PACKET_OPCODE_SENSOR_POWEROFF_REG,
 	CAM_SENSOR_PACKET_OPCODE_SENSOR_NOP = 127
 };
 
@@ -308,8 +306,6 @@ struct i2c_data_settings {
 	struct i2c_settings_array streamon_settings;
 	struct i2c_settings_array streamoff_settings;
 	struct i2c_settings_array read_settings;
-	struct i2c_settings_array poweron_reg_settings;
-	struct i2c_settings_array poweroff_reg_settings;
 	struct i2c_settings_array *per_frame;
 };
 
@@ -324,11 +320,25 @@ struct cam_sensor_power_ctrl_t {
 	uint8_t cam_pinctrl_status;
 };
 
+struct cam_camera_id_info {
+	uint16_t sensor_slave_addr;
+	uint32_t vendor_id_reg_addr;
+	uint32_t vendor_id;
+	uint8_t sensor_addr_type;
+	uint8_t sensor_data_type;
+};
+
+//bug552443 quanzhen.wt, add, 2020.05.12,add camera hardwareinfo
+#define MAX_SENSOR_NAME_SIZE 32
 struct cam_camera_slave_info {
 	uint16_t sensor_slave_addr;
 	uint16_t sensor_id_reg_addr;
 	uint16_t sensor_id;
 	uint16_t sensor_id_mask;
+	//bug552443 quanzhen.wt, add, 2020.05.12,add camera hardwareinfo
+	char sensor_name[MAX_SENSOR_NAME_SIZE];
+	uint8_t  addr_type;
+	uint8_t  data_type;
 	uint8_t  i2c_freq_mode;
 };
 
@@ -370,6 +380,7 @@ struct cam_sensor_power_setting {
 
 struct cam_sensor_board_info {
 	struct cam_camera_slave_info slave_info;
+	struct cam_camera_id_info id_info;
 	int32_t sensor_mount_angle;
 	int32_t secure_mode;
 	int modes_supported;
