@@ -484,14 +484,20 @@ static inline bool of2fs_need_balance_dirty(struct f2fs_sb_info *sbi)
 
 static inline void of2fs_balance_fs(struct f2fs_sb_info *sbi)
 {
+	struct f2fs_gc_control gc_control = {
+		.victim_segno = NULL_SEGNO,
+		.init_gc_type = FG_GC,
+		.should_migrate_blocks = false,
+		.err_gc_skipped = true };
+
 	if (!sbi->gc_opt_enable) {
 		/*
 		 * We should do GC or end up with checkpoint, if there are so many dirty
 		 * dir/node pages without enough free segments.
 		 */
 		if (has_not_enough_free_secs(sbi, 0, 0)) {
-			down_write(&sbi->gc_lock);
-			f2fs_gc(sbi, false, false, NULL_SEGNO);
+			f2fs_down_write(&sbi->gc_lock);
+			f2fs_gc(sbi, &gc_control);
 		}
 		return;
 	}
@@ -519,8 +525,8 @@ static inline void of2fs_balance_fs(struct f2fs_sb_info *sbi)
 		} else {
 			f2fs_printk(sbi, KERN_INFO "Debug:%s:no-gcthread,fggc,gc_opt_enable:%d",
 						__func__, sbi->gc_opt_enable);
-			down_write(&sbi->gc_lock);
-			f2fs_gc(sbi, false, false, NULL_SEGNO);
+			f2fs_down_write(&sbi->gc_lock);
+			f2fs_gc(sbi, &gc_control);
 		}
 	} else if (f2fs_need_SSR(sbi) && of2fs_need_balance_dirty(sbi)) {
 		struct f2fs_gc_kthread *gc_th = sbi->gc_thread;
@@ -5497,7 +5503,7 @@ static struct discard_cmd *__create_discard_cmd_of2fs(struct f2fs_sb_info *sbi,
 
 	pend_list = &dcc->pend_list[plist_idx(len)];
 
-	dc = f2fs_kmem_cache_alloc(discard_cmd_slab, GFP_NOFS);
+	dc = f2fs_kmem_cache_alloc(discard_cmd_slab, GFP_NOFS, true, NULL);
 	INIT_LIST_HEAD(&dc->list);
 	dc->bdev = bdev;
 	dc->lstart = lstart;

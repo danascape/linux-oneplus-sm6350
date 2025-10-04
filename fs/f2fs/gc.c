@@ -128,8 +128,8 @@ static inline void of2fs_tune_wait_ms(struct f2fs_sb_info *sbi, unsigned int *wa
 	unsigned int min_wait_ms;
 	struct f2fs_gc_kthread *gc_th = sbi->gc_thread;
 
-	if (sbi->gc_mode == GC_URGENT) {
-		// do nothing in GC_URGENT mode
+	if (sbi->gc_mode == GC_URGENT_HIGH) {
+		// do nothing in GC_URGENT_HIGH mode
 		return;
 	} else if (is_gc_frag(sbi)) {
 		*wait_ms = DEF_GC_FRAG_MIN_SLEEP_TIME;
@@ -150,6 +150,10 @@ static inline bool of2fs_gc_wait(struct f2fs_sb_info *sbi, wait_queue_head_t *wq
 {
 	struct f2fs_gc_kthread *gc_th = sbi->gc_thread;
 	wait_queue_head_t *fggc_wq = &gc_th->fggc_wait_queue_head;
+	struct f2fs_gc_control gc_control = { .victim_segno = NULL_SEGNO,
+			.init_gc_type = FG_GC,
+			.should_migrate_blocks = false,
+			.err_gc_skipped = true };
 
 	f2fs_printk(sbi, KERN_INFO "Debug:%s:gc_opt_enable:%d", __func__, sbi->gc_opt_enable);
 	if (!sbi->gc_opt_enable) {
@@ -169,8 +173,8 @@ static inline bool of2fs_gc_wait(struct f2fs_sb_info *sbi, wait_queue_head_t *wq
 			msecs_to_jiffies(*wait_ms));
 	if (atomic_read(&sbi->need_ssr_gc) > 0) {
 		f2fs_printk(sbi, KERN_INFO "need_SSR GC triggered!");
-		down_write(&sbi->gc_lock);
-		f2fs_gc(sbi, true, false, NULL_SEGNO);
+		f2fs_down_write(&sbi->gc_lock);
+		f2fs_gc(sbi, &gc_control);
 		atomic_dec(&sbi->need_ssr_gc);
 		if (!has_not_enough_free_secs(sbi, 0, 0) &&
 			wq_has_sleeper(fggc_wq)) {
@@ -179,8 +183,9 @@ static inline bool of2fs_gc_wait(struct f2fs_sb_info *sbi, wait_queue_head_t *wq
 		return true;
 	} else if (wq_has_sleeper(fggc_wq)) {
 		f2fs_printk(sbi, KERN_INFO "FG GC triggered!");
-		down_write(&sbi->gc_lock);
-		f2fs_gc(sbi, false, false, NULL_SEGNO);
+		f2fs_down_write(&sbi->gc_lock);
+		gc_control.err_gc_skipped = false;
+		f2fs_gc(sbi, &gc_control);
 		wake_up_all(fggc_wq);
 		return true;
 	}

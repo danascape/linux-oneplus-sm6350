@@ -310,8 +310,6 @@ static int memplus_swapin_walk_pmd_entry(pmd_t *pmd, unsigned long start,
 				.address = index,
 				.flags = FAULT_FLAG_ALLOW_RETRY | FAULT_FLAG_RETRY_NOWAIT,
 				.pmd = pmd,
-				.vma_flags = vma->vm_flags,
-				.vma_page_prot = vma->vm_page_prot,
 			};
 
 			ret = do_swap_page(&fe);
