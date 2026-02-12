@@ -77,9 +77,9 @@ static struct proc_dir_entry *mipi_proc_entry = NULL;
 static struct dsi_read_config read_reg;
 extern int dsi_display_read_panel(struct dsi_panel *panel, struct dsi_read_config *read_config);
 
-#ifdef OEM_TARGET_PRODUCT_BILLIE
 extern struct dsi_panel *TP_Panel;
-extern bool gesture_mode_value;
+extern int gesture_mode_value;
+#ifdef OEM_TARGET_PRODUCT_BILLIE
 int __attribute__((weak)) update_tpfw_notifier_call_chain(unsigned long val, void *v){return 0 ;}
 #endif
 
@@ -822,18 +822,11 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 	if (gpio_is_valid(panel->reset_config.disp_en_gpio))
 		gpio_set_value(panel->reset_config.disp_en_gpio, 0);
 
-#ifdef OEM_TARGET_PRODUCT_BILLIE
-	if (!gesture_mode_value ||panel->esd_gesture_recovery) {
+	if (!gesture_mode_value || panel->esd_gesture_recovery) {
 		if (gpio_is_valid(panel->reset_config.reset_gpio) &&
 						!panel->reset_gpio_always_on)
 			gpio_set_value(panel->reset_config.reset_gpio, 0);
 	}
-#else
-	if (gpio_is_valid(panel->reset_config.reset_gpio)) {
-		gpio_set_value(panel->reset_config.reset_gpio, 0);
-		DSI_ERR("disable reset gpio\n");
-	}
-#endif
 
 #if defined(CONFIG_PXLW_IRIS)
 	iris_power_off(panel);
@@ -849,16 +842,13 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 		       rc);
 	}
 
-#ifdef OEM_TARGET_PRODUCT_BILLIE
 	if (gesture_mode_value) {
 		TP_Panel = panel;
 		DSI_ERR("%s: [%s]---gesture_mode_value = %d---\n ----TP_Panel = panel----\n", __func__, TP_Panel->name, gesture_mode_value);
 	}
-#endif
 
 	if ((strcmp(panel->name, "samsung sofef03f_m fhd cmd mode dsc dsi panel") == 0)
 		|| (strcmp(panel->name, "samsung amb655x fhd cmd mode dsc dsi panel") == 0)) {
-#ifdef OEM_TARGET_PRODUCT_BILLIE
 	usleep_range(4000, 5000);
 	if (gpio_is_valid(panel->reset_config.reset_gpio)) {
 		if (!gesture_mode_value) {
@@ -868,12 +858,6 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 	}
 	usleep_range(10000, 12000);
 	}
-#else
-		msleep(10);
-	} else {
-		msleep(1);
-	}
-#endif
 
 	if (gpio_is_valid(panel->vddd_gpio)) {
 		gpio_set_value(panel->vddd_gpio, 0);
@@ -898,20 +882,12 @@ static int dsi_panel_power_off(struct dsi_panel *panel)
 				 rc);
 	}
 
-#ifdef OEM_TARGET_PRODUCT_BILLIE
-	if (!gesture_mode_value||panel->esd_gesture_recovery) {
+	if (!gesture_mode_value || panel->esd_gesture_recovery) {
 		rc = dsi_pwr_enable_regulator(&panel->power_info, false);
 		if (rc)
 			DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
 				panel->name, rc);
 	}
-#else
-	rc = dsi_pwr_enable_regulator(&panel->power_info, false);
-	DSI_ERR("disable dsi pwr regulator\n");
-	if (rc)
-		DSI_ERR("[%s] failed to enable vregs, rc=%d\n",
-				panel->name, rc);
-#endif
 
 	return rc;
 }
@@ -5210,8 +5186,7 @@ int dsi_panel_pre_prepare(struct dsi_panel *panel)
 
 	mutex_lock(&panel->panel_lock);
 
-#ifdef OEM_TARGET_PRODUCT_BILLIE
-        if (!gesture_mode_value ||panel->esd_gesture_recovery) {
+	if (!gesture_mode_value || panel->esd_gesture_recovery) {
 		rc = dsi_pwr_enable_regulator(&panel->power_info, true);
 		panel->esd_gesture_recovery = false;
 	}
@@ -5220,7 +5195,6 @@ int dsi_panel_pre_prepare(struct dsi_panel *panel)
 			panel->name, rc);
 		goto error;
 	}
-#endif
 
 #if defined(CONFIG_PXLW_IRIS)
 	iris_power_on(panel);
