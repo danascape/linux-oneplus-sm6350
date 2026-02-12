@@ -2667,6 +2667,7 @@ static enum power_supply_property smb5_batt_props[] = {
 	POWER_SUPPLY_PROP_ENGINEER_MODE,
 #endif
 	POWER_SUPPLY_PROP_FASTCHG_STARTING,
+	POWER_SUPPLY_PROP_SWITCH_DASH,
 	POWER_SUPPLY_CUTOFF_VOLT_WITH_CHARGER,
 	POWER_SUPPLY_PROP_CHARGING_ENABLED,
 	POWER_SUPPLY_PROP_INPUT_CURRENT_MAX,
@@ -2782,6 +2783,9 @@ static int smb5_batt_get_prop(struct power_supply *psy,
 		break;
 	case POWER_SUPPLY_PROP_FASTCHG_STARTING:
 		val->intval = op_get_fastchg_ing(chg);
+		break;
+	case POWER_SUPPLY_PROP_SWITCH_DASH:
+		val->intval = chg->fastchg_switch_disable ? 1 : 0;
 		break;
 	case POWER_SUPPLY_PROP_CHARGING_ENABLED:
 		val->intval = chg->chg_enabled;
@@ -3214,6 +3218,7 @@ static int smb5_batt_prop_is_writeable(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_INPUT_CURRENT_MAX:
 	case POWER_SUPPLY_PROP_IS_AGING_TEST:
 	case POWER_SUPPLY_PROP_CONNECT_DISABLE:
+	case POWER_SUPPLY_PROP_SWITCH_DASH:
 	case POWER_SUPPLY_PROP_FASTCHG_IS_OK:
 #ifdef OP_SWARP_SUPPORTED
 	// Fall-through.
