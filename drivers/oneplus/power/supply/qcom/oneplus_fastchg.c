@@ -2346,7 +2346,7 @@ static void dashchg_fw_update(struct work_struct *work)
 			(void)opchg_mcu_action(ACTION_MODE_RESET_SLEEP);
 #endif
 		__pm_relax(di->fastchg_update_fireware_lock);
-		set_property_on_smbcharger(POWER_SUPPLY_PROP_SWITCH_DASH, true);
+		set_property_on_smbcharger(POWER_SUPPLY_PROP_SWITCH_DASH, false);
 		di->dash_firmware_ok = 1;
 		pr_info("FW check success\n"); /* david@bsp add log */
 		return;
@@ -2461,7 +2461,7 @@ update_done:
 		(void)opchg_mcu_action(ACTION_MODE_RESET_SLEEP);
 #endif
 	__pm_relax(di->fastchg_update_fireware_lock);
-	set_property_on_smbcharger(POWER_SUPPLY_PROP_SWITCH_DASH, true);
+	set_property_on_smbcharger(POWER_SUPPLY_PROP_SWITCH_DASH, false);
 	di->dash_firmware_ok = 1;
 	pr_info("result=success\n");
 	return;
@@ -2474,7 +2474,7 @@ update_fw_err:
 		(void)opchg_mcu_action(ACTION_MODE_RESET_SLEEP);
 #endif
 	__pm_relax(di->fastchg_update_fireware_lock);
-	set_property_on_smbcharger(POWER_SUPPLY_PROP_SWITCH_DASH, true);
+	set_property_on_smbcharger(POWER_SUPPLY_PROP_SWITCH_DASH, false);
 	pr_err("result=fail\n");
 }
 

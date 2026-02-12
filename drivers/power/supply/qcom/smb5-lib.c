@@ -10466,6 +10466,13 @@ int check_allow_switch_dash(struct smb_charger *chg,
 	if (val->intval < 0)
 		return -EINVAL;
 
+	if (val->intval > 0) {
+		chg->fastchg_switch_disable = true;
+		pr_info("fastcharge disabled from userspace\n");
+		return 0;
+	}
+
+	chg->fastchg_switch_disable = false;
 	schedule_delayed_work(&chg->check_switch_dash_work,
 				msecs_to_jiffies(500));
 	return 0;
