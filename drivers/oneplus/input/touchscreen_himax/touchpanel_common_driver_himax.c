@@ -4932,6 +4932,7 @@ int register_common_touch_device(struct touchpanel_data *pdata)
 	ts->is_suspended = 0;
 	ts->suspend_state = TP_SPEEDUP_RESUME_COMPLETE;
 	ts->gesture_enable = 1;
+	gesture_mode_value = 1;
 	ts->es_enable = 0;
 	ts->fd_enable = 0;
 	ts->palm_enable = 1;
@@ -5102,6 +5103,7 @@ static int tp_suspend(struct device *dev)
 	if (ts->black_gesture_support) {
 		if (ts->gesture_enable == 1) {
 			ts->ts_ops->mode_switch(ts->chip_data, MODE_GESTURE, true);
+			enable_irq_wake(ts->irq);
 			goto EXIT;
 		}
 	}
@@ -5238,6 +5240,11 @@ static void tp_resume(struct device *dev)
 		TPD_INFO("%s: do not resume twice.\n", __func__);
 		goto NO_NEED_RESUME;
 	}
+
+	if (ts->black_gesture_support && ts->gesture_enable == 1) {
+		disable_irq_wake(ts->irq);
+	}
+
 	ts->is_suspended = 0;
 	ts->suspend_state = TP_RESUME_COMPLETE;
 	if (ts->loading_fw)
@@ -5461,6 +5468,7 @@ static int tfb_notifier_callback(struct notifier_block *self, unsigned long even
 		//TPD_INFO("%s: event = %ld, blank = %d\n", __func__, event, *blank);
 		if (*blank == DRM_PANEL_BLANK_POWERDOWN) { //suspend
 			if (event == DRM_PANEL_EARLY_EVENT_BLANK) {    //early event
+				gesture_mode_value = ts->gesture_enable;
 
 				timed_out = wait_for_completion_timeout(&ts->pm_complete, 0.5*HZ);  //wait resume over for 0.5s
 				if ((0 == timed_out) || (ts->pm_complete.done)) {
@@ -5491,6 +5499,33 @@ static int tfb_notifier_callback(struct notifier_block *self, unsigned long even
 
 				} else if (ts->tp_suspend_order == LCD_TP_SUSPEND) {
 					tp_suspend(ts->dev);
+				}
+			}
+		} else if (*blank == DRM_PANEL_BLANK_UNBLANK) { //resume
+			if (event == DRM_PANEL_EARLY_EVENT_BLANK) {    //early event
+
+				timed_out = wait_for_completion_timeout(&ts->pm_complete, 0.5*HZ);  //wait suspend over for 0.5s
+				if ((0 == timed_out) || (ts->pm_complete.done)) {
+					TPD_INFO("completion state, timed_out:%d, done:%d\n", timed_out, ts->pm_complete.done);
+				}
+
+				ts->suspend_state = TP_RESUME_EARLY_EVENT;       //set suspend_resume_state
+
+				if (ts->tp_resume_order == TP_LCD_RESUME) {
+					TPD_INFO("TP_LCD_RESUME\n");
+					tp_resume(ts->dev);
+				} else if (ts->tp_resume_order == LCD_TP_RESUME) {
+					TPD_INFO("disable tp isr 112,  tp irq  %d\n", ts->irq);
+					disable_irq_nosync(ts->irq);
+				}
+			} else if (event == DRM_PANEL_EVENT_BLANK) {   //event
+
+				if (ts->tp_resume_order == TP_LCD_RESUME) {
+
+				} else if (ts->tp_resume_order == LCD_TP_RESUME) {
+					tp_resume(ts->dev);
+					TPD_INFO("enable tp isr 113, tp irq  %d\n", ts->irq);
+					enable_irq(ts->irq);
 				}
 			}
 		}
