@@ -1072,11 +1072,11 @@ static ssize_t panel_serial_number_show(struct device *dev,
 	else if (ddic_check_info == 0)
 		ddic_check_result = "NG";
 
-		ret = scnprintf(buf, PAGE_SIZE,
-		"%04d/%02d/%02d\n%02d:%02d:%02d:%03d.%01d\n%s\nID: %02X %02X %02X\nDDIC_Check_Result: %s\n",
-				panel_year, panel_mon, panel_day, panel_hour, panel_min,
-					panel_sec, panel_msec_int, panel_msec_rem, stage_string_info, panel_code_info,
-							panel_stage_info, panel_production_info, ddic_check_result);
+	ret = scnprintf(buf, PAGE_SIZE,
+	"%04d/%02d/%02d\n%02d:%02d:%02d:%03d.%01d\n%s\nID: %02X %02X %02X\nDDIC_Check_Result: %s\n",
+			panel_year, panel_mon, panel_day, panel_hour, panel_min,
+				panel_sec, panel_msec_int, panel_msec_rem, stage_string_info, panel_code_info,
+						panel_stage_info, panel_production_info, ddic_check_result);
 	} else if (dsi_panel_name == DSI_PANEL_SAMSUNG_ANA6706) {
 		panel_ic_v_info = dsi_display_get_panel_ic_v_info(connector);
 
