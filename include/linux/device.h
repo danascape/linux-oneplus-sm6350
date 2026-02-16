@@ -1126,6 +1126,10 @@ struct device {
 	bool			dma_coherent:1;
 #endif
 
+#ifdef CONFIG_CONTROL_CENTER
+	bool cc_marked;
+#endif
+
 	ANDROID_KABI_RESERVE(1);
 	ANDROID_KABI_RESERVE(2);
 	ANDROID_KABI_RESERVE(3);

@@ -545,4 +545,5 @@ static inline void printk_deferred_exit(void)
 }
 #endif
 
+int force_oem_console_setup(char *str);
 #endif
