@@ -11510,9 +11510,9 @@ int dsi_display_read_panel_id(struct dsi_display *dsi_display,
     if (!m_ctrl->ctrl->vaddr)
         goto error;
 
-	cmds->msg.rx_buf = buf;
-	cmds->msg.rx_len = len;
-	retry_times = 0;
+    cmds->msg.rx_buf = buf;
+    cmds->msg.rx_len = len;
+    retry_times = 0;
     do {
 	    rc = dsi_ctrl_cmd_transfer(m_ctrl->ctrl, &cmds->msg, &flags);
 	    retry_times++;
