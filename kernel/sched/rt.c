@@ -1869,8 +1869,8 @@ static int rt_energy_aware_wake_cpu(struct task_struct *task)
 		goto unlock;
 
 #if defined(CONFIG_CONTROL_CENTER) && defined(CONFIG_IM)
-	boost_on_big = boost_on_big |
-		im_hwc(task) | // HWC select big core first
+	boost_on_big = boost_on_big ||
+		im_hwc(task) || // HWC select big core first
 		(im_sf(task) && ccdm_get_hint(CCDM_TB_PLACE_BOOST));
 #endif
 
