@@ -41,7 +41,7 @@
 #include <linux/spi/spi.h>
 #include <drm/drm_panel.h>
 
-#include <drm/dsi_pwr.h>
+#include <dsi/dsi_pwr.h>
 #include <dsi/dsi_panel.h>
 
 #include "hx83112f_noflash.h"
