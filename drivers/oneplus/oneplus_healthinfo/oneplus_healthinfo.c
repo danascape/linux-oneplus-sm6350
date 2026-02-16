@@ -1216,7 +1216,7 @@ static ssize_t irq_latency_read(struct file *filp, char __user *buff, size_t cou
     if (!page)
         return -ENOMEM;
 
-	for ( i = 0; i < NR_CPUS; i++) {
+    for ( i = 0; i < NR_CPUS; i++) {
 		len += sprintf(page + len, "cpu%d:\n", i);
 		sched_stat = &irq_latency_stat[i];
 		len += COMMON_STRING_FORMAT(page + len, irq_latency, sched_stat, i);
