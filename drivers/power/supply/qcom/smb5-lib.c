@@ -12620,11 +12620,11 @@ static void op_recovery_set_work(struct work_struct *work)
 	else
 #endif
 		rc = smblib_write(chg, USBIN_AICL_OPTIONS_CFG_REG, 0xc7);
-		if (rc < 0)
-			smblib_err(chg,
-			"Couldn't enable OTG regulator rc=%d\n", rc);
-		chg->charger_collpse = false;
-		chg->reset_count = 0;
+	if (rc < 0)
+		smblib_err(chg,
+		"Couldn't enable OTG regulator rc=%d\n", rc);
+	chg->charger_collpse = false;
+	chg->reset_count = 0;
 	} else {
 		chg->reset_count++;
 		schedule_delayed_work(&chg->op_re_set_work,
