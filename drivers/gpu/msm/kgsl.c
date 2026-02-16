@@ -5077,6 +5077,7 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 	struct kgsl_process_private *private = dev_priv->process_priv;
 	struct kgsl_device *device = dev_priv->device;
 	struct kgsl_mem_entry *entry = NULL;
+	pid_t pid = pid_nr(private->pid);
 
 	if (vma_offset == (unsigned long) device->memstore.gpuaddr)
 		return get_unmapped_area(NULL, addr, len, pgoff, flags);
@@ -5096,7 +5097,7 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 		if (IS_ERR_VALUE(val))
 			dev_err_ratelimited(device->dev,
 					       "get_unmapped_area: pid %d addr %lx pgoff %lx len %ld failed error %d\n",
-						pid_nr(private->pid), addr,
+						pid, addr,
 						pgoff, len, (int) val);
 	} else {
 		val = _get_svm_area(private, entry, addr, len, flags);
@@ -5123,8 +5124,8 @@ kgsl_get_unmapped_area(struct file *file, unsigned long addr,
 				largest_gap_gpu = vma->rb_glfragment_gap;
 			}
 
-			if ((int) private->pid != current_pid) {
-				current_pid = (int) private->pid;
+			if (pid != current_pid) {
+				current_pid = pid;
 				kgsl_send_uevent_notify(device, current->group_leader->comm,
 					len, mm->total_vm, largest_gap_cpu, largest_gap_gpu);
 			}
