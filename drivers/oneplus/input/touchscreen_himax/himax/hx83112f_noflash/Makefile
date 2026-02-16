@@ -11,7 +11,6 @@ endif
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat
 ccflags-y += -I$(srctree)/drivers/misc/mediatek/include/mt-plat/mt6763/include
 subdir-ccflags-y += -I$(srctree)/drivers/spi/mediatek/mt6763/ -fPIC
-
 # Each configuration option enables a list of files.
 obj-$(CONFIG_TOUCHPANEL_HIMAX_HX83112F_NOFLASH) += hx83112f_noflash.o
 #endif

@@ -17,7 +17,7 @@
 #include <linux/update_tpfw_notifier.h>
 #include <linux/delay.h>
 
-#include <drm/dsi_pwr.h>
+#include <dsi/dsi_pwr.h>
 #include <dsi/dsi_panel.h>
 
 #include <uapi/linux/sched/types.h>
