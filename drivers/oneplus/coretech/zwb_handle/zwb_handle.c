@@ -104,7 +104,7 @@ static int zwb_clear_walk_pmd_entry(pmd_t *pmd, unsigned long start,
 		swp_entry_t entry;
 		spinlock_t *ptl;
 
-		if (!list_empty(&vma->vm_mm->mmap_sem.wait_list))
+		if (!list_empty(&vma->vm_mm->mmap_lock.wait_list))
 			return -1;
 
 		orig_pte = pte_offset_map_lock(vma->vm_mm, pmd, start, &ptl);
@@ -158,7 +158,7 @@ retry:
 	walk.mm = mm;
 	walk.pmd_entry = zwb_clear_walk_pmd_entry;
 
-	down_read(&mm->mmap_sem);
+	down_read(&mm->mmap_lock);
 
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		if (is_vm_hugetlb_page(vma))
@@ -178,7 +178,7 @@ retry:
 	}
 
 	flush_tlb_mm(mm);
-	up_read(&mm->mmap_sem);
+	up_read(&mm->mmap_lock);
 	mmput(mm);
 	if (err) {
 		err = 0;
