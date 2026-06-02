@@ -289,7 +289,7 @@ static int memplus_swapin_walk_pmd_entry(pmd_t *pmd, unsigned long start,
 		struct page *page;
 		spinlock_t *ptl;
 
-		if (!list_empty(&vma->vm_mm->mmap_sem.wait_list))
+		if (!list_empty(&vma->vm_mm->mmap_lock.wait_list))
 			return -1;
 
 		orig_pte = pte_offset_map_lock(vma->vm_mm, pmd, start, &ptl);
@@ -489,7 +489,7 @@ retry:
 	walk.mm = mm;
 	walk.pmd_entry = memplus_swapin_walk_pmd_entry;
 
-	down_read(&mm->mmap_sem);
+	down_read(&mm->mmap_lock);
 
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		if (vma->memplus_flags)
@@ -513,7 +513,7 @@ retry:
 	}
 
 	flush_tlb_mm(mm);
-	up_read(&mm->mmap_sem);
+	up_read(&mm->mmap_lock);
 	mmput(mm);
 	if (err) {
 		err = 0;
@@ -759,7 +759,7 @@ gc_proceed:
 
 	reclaim_walk.private = &rp;
 
-	down_read(&mm->mmap_sem);
+	down_read(&mm->mmap_lock);
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		if (is_vm_hugetlb_page(vma))
 			continue;
@@ -784,7 +784,7 @@ gc_proceed:
 	}
 
 	flush_tlb_mm(mm);
-	up_read(&mm->mmap_sem);
+	up_read(&mm->mmap_lock);
 	a_task_anon = get_mm_counter(mm, MM_ANONPAGES);
 	a_task_swap = get_mm_counter(mm, MM_SWAPENTS);
 	mmput(mm);
@@ -1094,7 +1094,7 @@ retry:
 	walk.mm = mm;
 	walk.pmd_entry = memplus_swapin_walk_pmd_entry;
 
-	down_read(&mm->mmap_sem);
+	down_read(&mm->mmap_lock);
 
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		if (is_vm_hugetlb_page(vma))
@@ -1114,7 +1114,7 @@ retry:
 	}
 
 	flush_tlb_mm(mm);
-	up_read(&mm->mmap_sem);
+	up_read(&mm->mmap_lock);
 	mmput(mm);
 	if (err) {
 		err = 0;
@@ -1174,7 +1174,7 @@ static ssize_t memex_do_reclaim_anon(struct task_struct *task, int prev_adj)
 	reclaim_walk.pmd_entry = memplus_reclaim_pte;
 	reclaim_walk.private = &rp;
 
-	down_read(&mm->mmap_sem);
+	down_read(&mm->mmap_lock);
 	for (vma = mm->mmap; vma; vma = vma->vm_next) {
 		if (is_vm_hugetlb_page(vma))
 			continue;
@@ -1189,9 +1189,9 @@ static ssize_t memex_do_reclaim_anon(struct task_struct *task, int prev_adj)
 		rp.vma = vma;
 
 		/* TODO: do we need this check? */
-		if (!list_empty(&vma->vm_mm->mmap_sem.wait_list)) {
+		if (!list_empty(&vma->vm_mm->mmap_lock.wait_list)) {
 #if MEMEX_DEBUG
-			pr_info("MemEX mmap_sem waiting %s(%d)\n", task->comm, task->pid);
+			pr_info("MemEX mmap_lock waiting %s(%d)\n", task->comm, task->pid);
 #endif
 			break;
 		}
@@ -1204,7 +1204,7 @@ static ssize_t memex_do_reclaim_anon(struct task_struct *task, int prev_adj)
 	}
 
 	flush_tlb_mm(mm);
-	up_read(&mm->mmap_sem);
+	up_read(&mm->mmap_lock);
 	a_task_anon = get_mm_counter(mm, MM_ANONPAGES);
 	a_task_swap = get_mm_counter(mm, MM_SWAPENTS);
 	mmput(mm);

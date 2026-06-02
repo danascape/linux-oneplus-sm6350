@@ -62,7 +62,7 @@ config UXCHAIN
 config UXCHAIN_V2
         default n
         depends on UXCHAIN
-        bool "optimization for mmap_sem of mm_struct "
+        bool "optimization for mmap_lock of mm_struct "
 
 config TPD
 	default n
