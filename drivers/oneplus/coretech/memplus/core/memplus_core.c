@@ -1554,7 +1554,7 @@ unsigned long memplus_scan(void)
 
 					index = indices[i];
 
-					if (radix_tree_exceptional_entry(page)) {
+					if (xa_is_value(page)) {
 						continue;
 					}
 
