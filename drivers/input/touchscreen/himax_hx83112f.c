@@ -4,23 +4,27 @@
  *
  * Copyright (C) 2026 Saalim Quadri <danascape@gmail.com>
  *
- * Minimal bring-up: Himax SPI framing, the AHB register model, controller
- * reset and safe-mode entry, IC-ID detection, and a type-B multitouch input
- * device driven by a threaded IRQ. The HX83112F has no on-chip flash, so it
- * does not report touch until its firmware is downloaded into SRAM; that is
- * added in later changes.
+ * The HX83112F has no on-chip flash: its firmware lives in the rootfs and
+ * must be downloaded into the controller's SRAM after every reset (probe and
+ * resume) before touch reporting works. This driver implements the Himax SPI
+ * framing, the AHB register model, the zero-flash SRAM download, and touch
+ * event parsing.
  *
  * The register/event handling is derived from the mainline himax_hx83112b
- * driver by Job Noorman.
+ * driver by Job Noorman, and the zero-flash sequences from the OnePlus/Himax
+ * "Android Driver Sample Code for HX83112 chipset".
  *
- * Back-ported to the 4.19 downstream OnePlus/SM6350 tree (no cleanup.h scope
- * guards, devm_mutex_init() or modern PM_OPS helpers); binds the existing
- * "himax,hxcommon" device node in place of the vendor framework driver.
+ * This copy is back-ported to the 4.19 downstream OnePlus/SM6350 tree: it
+ * avoids cleanup.h scope guards, devm_mutex_init() and the modern PM_OPS
+ * helpers, and it also matches the existing "himax,hxcommon" device node so
+ * it can be swapped in for the vendor framework driver without DT changes
+ * beyond a mainline-style "reset-gpios" property (see the driver commit msg).
  */
 
 #include <linux/delay.h>
 #include <linux/device.h>
 #include <linux/err.h>
+#include <linux/firmware.h>
 #include <linux/gpio/consumer.h>
 #include <linux/input.h>
 #include <linux/input/mt.h>
@@ -34,13 +38,15 @@
 #include <linux/property.h>
 #include <linux/slab.h>
 #include <linux/spi/spi.h>
+#include <linux/workqueue.h>
 
 #define HIMAX_MAX_POINTS		10
 
 /* Himax SPI framing: a 2-byte command header precedes every AHB access. */
 #define HIMAX_SPI_WRITE			0xf2
 #define HIMAX_SPI_READ			0xf3
-/* header(2) + AHB address(4) + max payload per transfer */
+#define HIMAX_SPI_RETRIES		10
+/* header(2) + AHB address(4) + max SRAM payload per transfer */
 #define HIMAX_SRAM_CHUNK		240
 #define HIMAX_XFER_MAX			(2 + 4 + HIMAX_SRAM_CHUNK)
 
@@ -69,10 +75,50 @@
 #define HIMAX_REG_SAFE_MODE_STATUS	0x900000a8
 #define HIMAX_REG_TCON_RST		0x80020020
 #define HIMAX_REG_ADC_RST		0x80020094
+#define HIMAX_REG_RELOAD_ACTIVE		0x90000048
+#define HIMAX_RELOAD_ACTIVE_REQ		0x000000ec
+#define HIMAX_RELOAD_ACTIVE_DONE	0x000001ec
+
+/* Hardware CRC engine */
+#define HIMAX_REG_CRC_ADDR		0x80050020
+#define HIMAX_REG_CRC_LEN		0x80050028
+#define HIMAX_REG_CRC_STATUS		0x80050000
+#define HIMAX_REG_CRC_RESULT		0x80050018
+#define HIMAX_CRC_LEN_MAGIC		0x00990000
+#define HIMAX_CRC_BUSY			BIT(0)
+
+/* Zero-flash download */
+#define HIMAX_SRAM_FW_ADDR		0x20000000
+#define HIMAX_REG_DIS_FLASH_RELOAD	0x10007f00
+#define HIMAX_DIS_FLASH_RELOAD_VAL	0x00009aa9
+#define HIMAX_REG_FLASH_RELOAD_CLR	0x100072c0
+#define HIMAX_REG_MODE_SWITCH		0x10007294
+
+#define HIMAX_FW_1K			0x400		/* leading header */
+#define HIMAX_FW_64K			0x10000		/* main FW body */
+#define HIMAX_PART_TABLE_OFF		(HIMAX_FW_64K + HIMAX_FW_1K)
+#define HIMAX_PART_DESC_SZ		0x10
+#define HIMAX_PART_NUM_OFF		12
+#define HIMAX_CFG_ALIGN			16
 
 #define HIMAX_INVALID_COORD		0xffff
 
 #define HIMAX_RESET_MS			5
+
+#define HIMAX_DEFAULT_FW_NAME		"Himax_firmware.bin"
+
+/*
+ * On Android the touch firmware is supplied by ueventd through the firmware
+ * usermode-helper fallback (it searches /vendor/firmware, /vendor/etc/firmware,
+ * etc.), which the kernel's direct filesystem search path does not cover. So we
+ * must use request_firmware() (which engages that fallback), exactly like the
+ * vendor driver -- request_firmware_direct() bypasses it and never finds the
+ * file. request_firmware() can block until userspace is ready, so it is run
+ * from a retrying delayed work (not probe) to keep boot non-blocking.
+ */
+#define HIMAX_FW_FIRST_DELAY_MS		4000	/* let ueventd/vendor come up first */
+#define HIMAX_FW_RETRY_MS		2000
+#define HIMAX_FW_MAX_RETRIES		20
 
 struct himax_event_point {
 	__be16 x;
@@ -99,9 +145,24 @@ struct himax_ts_data {
 	struct gpio_desc *reset_gpio;
 	struct mutex bus_lock;
 
+	/* Cached firmware image, re-downloaded to SRAM on every reset. */
+	const u8 *fw_data;
+	size_t fw_size;
+
 	/* DMA-safe SPI bounce buffers, protected by bus_lock. */
 	u8 *tx_buf;
 	u8 *rx_buf;
+
+	/* Deferred firmware load (Android: fw partition mounts after probe). */
+	struct delayed_work fw_work;
+	int fw_retries;
+};
+
+/* One config partition merged into a contiguous SRAM window. */
+struct himax_cfg_part {
+	u32 sram_addr;
+	u32 fw_addr;
+	u16 write_size;
 };
 
 static void himax_addr_to_bytes(u32 addr, u8 *b)
@@ -242,6 +303,58 @@ static int himax_reg_write32(struct himax_ts_data *ts, u32 addr, u32 val)
 	return himax_reg_write(ts, addr, d, 4);
 }
 
+/* Chunked SRAM write with auto address increment. */
+static int himax_sram_write(struct himax_ts_data *ts, u32 addr,
+			    const u8 *data, size_t len)
+{
+	u8 hdr[4];
+	size_t off = 0;
+	int ret;
+
+	ret = himax_burst_enable(ts, true);
+	if (ret)
+		return ret;
+
+	while (off < len) {
+		size_t chunk = min_t(size_t, len - off, HIMAX_SRAM_CHUNK);
+
+		himax_addr_to_bytes(addr + off, hdr);
+
+		mutex_lock(&ts->bus_lock);
+		ts->tx_buf[0] = HIMAX_SPI_WRITE;
+		ts->tx_buf[1] = HIMAX_AHB_ADDR_BYTE_0;
+		memcpy(ts->tx_buf + 2, hdr, 4);
+		memcpy(ts->tx_buf + 2 + 4, data + off, chunk);
+		ret = spi_write(ts->spi, ts->tx_buf, chunk + 4 + 2);
+		mutex_unlock(&ts->bus_lock);
+		if (ret)
+			return ret;
+
+		off += chunk;
+		udelay(100);
+	}
+
+	return 0;
+}
+
+static int himax_sys_reset(struct himax_ts_data *ts)
+{
+	int ret;
+
+	ret = himax_ahb_write_byte(ts, HIMAX_AHB_ADDR_RST_0, 0x27);
+	if (ret)
+		return ret;
+	ret = himax_ahb_write_byte(ts, HIMAX_AHB_ADDR_RST_1, 0x95);
+	if (ret)
+		return ret;
+	ret = himax_ahb_write_byte(ts, HIMAX_AHB_ADDR_RST_0, 0x00);
+	if (ret)
+		return ret;
+
+	usleep_range(1000, 1100);
+	return 0;
+}
+
 static void himax_reset(struct himax_ts_data *ts)
 {
 	/* reset-gpios is active-low: logical 1 == asserted == chip in reset. */
@@ -288,6 +401,258 @@ static int himax_sense_off(struct himax_ts_data *ts)
 		msleep(20);
 		himax_reg_write32(ts, HIMAX_REG_ADC_RST, 0x00000001);
 	}
+
+	return 0;
+}
+
+static int himax_reload_to_active(struct himax_ts_data *ts)
+{
+	u32 val;
+	int retry;
+
+	for (retry = 0; retry < HIMAX_SPI_RETRIES; retry++) {
+		himax_reg_write32(ts, HIMAX_REG_RELOAD_ACTIVE,
+				  HIMAX_RELOAD_ACTIVE_REQ);
+		usleep_range(1000, 1100);
+		if (himax_reg_read32(ts, HIMAX_REG_RELOAD_ACTIVE, &val))
+			continue;
+		if (val == HIMAX_RELOAD_ACTIVE_DONE)
+			return 0;
+	}
+
+	dev_warn(ts->dev, "reload-to-active did not settle\n");
+	return 0;
+}
+
+/* Wake the AHB interface and lock it into continuous burst mode. */
+static int himax_interface_on(struct himax_ts_data *ts)
+{
+	u8 dummy[4];
+	u8 c13, c0d;
+	int cnt, ret;
+
+	/* Dummy read to knock the bus awake. */
+	ret = himax_ahb_read(ts, HIMAX_AHB_ADDR_RDATA_BYTE_0, dummy, sizeof(dummy));
+	if (ret)
+		return ret;
+
+	for (cnt = 0; cnt < HIMAX_SPI_RETRIES; cnt++) {
+		himax_ahb_write_byte(ts, HIMAX_AHB_ADDR_CONTI, HIMAX_AHB_CMD_CONTI);
+		himax_ahb_write_byte(ts, HIMAX_AHB_ADDR_INCR4, HIMAX_AHB_CMD_INCR4);
+
+		if (himax_ahb_read(ts, HIMAX_AHB_ADDR_CONTI, &c13, 1))
+			continue;
+		if (himax_ahb_read(ts, HIMAX_AHB_ADDR_INCR4, &c0d, 1))
+			continue;
+		if (c13 == HIMAX_AHB_CMD_CONTI && c0d == HIMAX_AHB_CMD_INCR4)
+			return 0;
+		msleep(20);
+	}
+
+	dev_warn(ts->dev, "failed to enable burst mode\n");
+	return 0;
+}
+
+static int himax_sense_on(struct himax_ts_data *ts)
+{
+	int ret;
+
+	ret = himax_interface_on(ts);
+	if (ret)
+		return ret;
+
+	ret = himax_reg_write32(ts, HIMAX_REG_SAFE_MODE, 0x00000000);
+	if (ret)
+		return ret;
+
+	ret = himax_sys_reset(ts);
+	if (ret)
+		return ret;
+
+	return himax_reload_to_active(ts);
+}
+
+/* Kick the hardware CRC engine over [addr, addr+len) and read the result. */
+static u32 himax_hw_crc(struct himax_ts_data *ts, u32 addr, u32 len)
+{
+	u8 addr_bytes[4];
+	u32 status, result = 0;
+	int words = len / 4;
+	int retry;
+
+	himax_addr_to_bytes(addr, addr_bytes);
+	himax_reg_write(ts, HIMAX_REG_CRC_ADDR, addr_bytes, 4);
+	himax_reg_write32(ts, HIMAX_REG_CRC_LEN, HIMAX_CRC_LEN_MAGIC | words);
+
+	for (retry = 0; retry < 100; retry++) {
+		if (himax_reg_read32(ts, HIMAX_REG_CRC_STATUS, &status))
+			break;
+		if (!(status & HIMAX_CRC_BUSY)) {
+			himax_reg_read32(ts, HIMAX_REG_CRC_RESULT, &result);
+			return result;
+		}
+		usleep_range(1000, 1100);
+	}
+
+	dev_warn(ts->dev, "CRC engine stayed busy\n");
+	return ~0;
+}
+
+/* CRC-32C (Castagnoli) over the config image, matching the FW's algorithm. */
+static u32 himax_sw_crc(const u8 *data, u32 len)
+{
+	u32 crc = 0xffffffff;
+	int i, j;
+
+	for (i = 0; i < len / 4; i++) {
+		u32 word = data[i * 4] | data[i * 4 + 1] << 8 |
+			   data[i * 4 + 2] << 16 | data[i * 4 + 3] << 24;
+
+		crc ^= word;
+		for (j = 0; j < 32; j++) {
+			if (crc & 1)
+				crc = (crc >> 1) ^ 0x82f63b78;
+			else
+				crc >>= 1;
+		}
+	}
+
+	return crc;
+}
+
+/*
+ * Parse the partition table that follows the 64K FW body, merge the config
+ * partitions into one contiguous SRAM window, write it and verify its CRC.
+ */
+static int himax_download_config(struct himax_ts_data *ts)
+{
+	const u8 *fw = ts->fw_data;
+	u32 base = U32_MAX, max = 0, cfg_sz;
+	int part_num, i, i_max = 0;
+	struct himax_cfg_part *parts;
+	u8 *cfg_buf;
+	u32 crc;
+	int ret = 0;
+
+	if (ts->fw_size < HIMAX_PART_TABLE_OFF + HIMAX_PART_DESC_SZ)
+		return -EINVAL;
+
+	part_num = fw[HIMAX_PART_TABLE_OFF + HIMAX_PART_NUM_OFF];
+	if (part_num <= 1)
+		return -EINVAL;
+
+	if (ts->fw_size < HIMAX_PART_TABLE_OFF + part_num * HIMAX_PART_DESC_SZ)
+		return -EINVAL;
+
+	parts = kcalloc(part_num, sizeof(*parts), GFP_KERNEL);
+	if (!parts)
+		return -ENOMEM;
+
+	/* Partition 0 is the main FW body (already written); 1.. are config. */
+	for (i = 1; i < part_num; i++) {
+		const u8 *d = &fw[HIMAX_PART_TABLE_OFF + i * HIMAX_PART_DESC_SZ];
+
+		parts[i].sram_addr = d[0] | d[1] << 8 | d[2] << 16 | d[3] << 24;
+		parts[i].write_size = d[4] | d[5] << 8;
+		parts[i].fw_addr = d[8] | d[9] << 8 | d[10] << 16;
+
+		if (parts[i].fw_addr + parts[i].write_size > ts->fw_size) {
+			ret = -EINVAL;
+			goto out_parts;
+		}
+
+		if (parts[i].sram_addr < base)
+			base = parts[i].sram_addr;
+		if (parts[i].sram_addr > max) {
+			max = parts[i].sram_addr;
+			i_max = i;
+		}
+	}
+
+	cfg_sz = (max - base) + parts[i_max].write_size;
+	cfg_sz = ALIGN(cfg_sz, HIMAX_CFG_ALIGN);
+
+	cfg_buf = kzalloc(cfg_sz, GFP_KERNEL);
+	if (!cfg_buf) {
+		ret = -ENOMEM;
+		goto out_parts;
+	}
+
+	for (i = 1; i < part_num; i++) {
+		if (parts[i].sram_addr - base + parts[i].write_size > cfg_sz) {
+			ret = -EINVAL;
+			goto out_cfg;
+		}
+		memcpy(cfg_buf + (parts[i].sram_addr - base),
+		       &fw[parts[i].fw_addr], parts[i].write_size);
+	}
+
+	ret = himax_sram_write(ts, base, cfg_buf, cfg_sz);
+	if (ret)
+		goto out_cfg;
+
+	crc = himax_hw_crc(ts, base, cfg_sz);
+	if (crc != himax_sw_crc(cfg_buf, cfg_sz))
+		dev_warn(ts->dev, "config CRC mismatch (hw %#x)\n", crc);
+
+out_cfg:
+	kfree(cfg_buf);
+out_parts:
+	kfree(parts);
+	return ret;
+}
+
+/* Full zero-flash download: main FW body + config into SRAM, then activate. */
+static int himax_download_firmware(struct himax_ts_data *ts)
+{
+	u32 crc;
+	int ret;
+
+	if (ts->fw_size < HIMAX_FW_1K + HIMAX_FW_64K)
+		return -EINVAL;
+
+	himax_reset(ts);
+
+	ret = himax_sys_reset(ts);
+	if (ret)
+		return ret;
+
+	ret = himax_sense_off(ts);
+	if (ret)
+		return ret;
+
+	/* Main FW body: skip the 1K header, write the next 64K to SRAM. */
+	ret = himax_sram_write(ts, HIMAX_SRAM_FW_ADDR,
+			       ts->fw_data + HIMAX_FW_1K, HIMAX_FW_64K);
+	if (ret)
+		return ret;
+
+	crc = himax_hw_crc(ts, HIMAX_SRAM_FW_ADDR, HIMAX_FW_64K);
+	if (crc)
+		dev_warn(ts->dev, "firmware CRC mismatch (%#x)\n", crc);
+
+	ret = himax_download_config(ts);
+	if (ret) {
+		dev_err(ts->dev, "config download failed: %d\n", ret);
+		return ret;
+	}
+
+	ret = himax_reg_write32(ts, HIMAX_REG_MODE_SWITCH, 0x00000000);
+	if (ret)
+		return ret;
+
+	/* Disable flash reload so the FW runs from SRAM. */
+	ret = himax_reg_write32(ts, HIMAX_REG_DIS_FLASH_RELOAD,
+				HIMAX_DIS_FLASH_RELOAD_VAL);
+	if (ret)
+		return ret;
+	himax_reg_write32(ts, HIMAX_REG_FLASH_RELOAD_CLR, 0x00000000);
+
+	msleep(20);
+	ret = himax_sense_on(ts);
+	if (ret)
+		return ret;
+	msleep(20);
 
 	return 0;
 }
@@ -439,7 +804,7 @@ static int himax_input_register(struct himax_ts_data *ts)
 	return input_register_device(ts->input);
 }
 
-/* Bring the controller up: reset, safe mode, IC-ID check, input + IRQ. */
+/* Bring the controller up once the firmware image is in hand. */
 static int himax_start_hw(struct himax_ts_data *ts)
 {
 	int ret;
@@ -454,6 +819,10 @@ static int himax_start_hw(struct himax_ts_data *ts)
 	if (ret)
 		return ret;
 
+	ret = himax_download_firmware(ts);
+	if (ret)
+		return dev_err_probe(ts->dev, ret, "firmware download failed\n");
+
 	ret = himax_input_register(ts);
 	if (ret)
 		return ret;
@@ -464,6 +833,53 @@ static int himax_start_hw(struct himax_ts_data *ts)
 		return dev_err_probe(ts->dev, ret, "failed to request IRQ\n");
 
 	return 0;
+}
+
+/*
+ * Retrying firmware loader, mirroring the vendor driver: request_firmware()
+ * (usermode-helper fallback enabled) retried until userspace/ueventd can serve
+ * the file. Runs from a delayed work so probe -- and therefore boot -- never
+ * blocks on it.
+ */
+static void himax_fw_work(struct work_struct *work)
+{
+	struct himax_ts_data *ts =
+		container_of(to_delayed_work(work), struct himax_ts_data, fw_work);
+	const struct firmware *fw;
+	const char *fw_name;
+	u8 *copy;
+	int ret;
+
+	if (device_property_read_string(ts->dev, "firmware-name", &fw_name))
+		fw_name = HIMAX_DEFAULT_FW_NAME;
+
+	ret = request_firmware(&fw, fw_name, ts->dev);
+	if (ret) {
+		if (ts->fw_retries-- > 0) {
+			dev_info(ts->dev, "firmware \"%s\" not ready (%d), retrying\n",
+				 fw_name, ret);
+			schedule_delayed_work(&ts->fw_work,
+					      msecs_to_jiffies(HIMAX_FW_RETRY_MS));
+			return;
+		}
+		dev_err(ts->dev, "giving up loading firmware \"%s\": %d\n",
+			fw_name, ret);
+		return;
+	}
+
+	copy = devm_kmemdup(ts->dev, fw->data, fw->size, GFP_KERNEL);
+	ts->fw_size = fw->size;
+	release_firmware(fw);
+	if (!copy)
+		return;
+	ts->fw_data = copy;
+
+	ret = himax_start_hw(ts);
+	if (ret)
+		dev_err(ts->dev, "hardware init failed: %d\n", ret);
+	else
+		dev_info(ts->dev, "touchscreen ready (fw %zu bytes)\n",
+			 ts->fw_size);
 }
 
 static int himax_probe(struct spi_device *spi)
@@ -498,12 +914,33 @@ static int himax_probe(struct spi_device *spi)
 		return dev_err_probe(dev, PTR_ERR(ts->reset_gpio),
 				     "failed to get reset gpio\n");
 
-	return himax_start_hw(ts);
+	/*
+	 * Defer firmware load + controller bring-up: probe returns immediately
+	 * so boot is never blocked waiting for the firmware partition.
+	 */
+	ts->fw_retries = HIMAX_FW_MAX_RETRIES;
+	INIT_DELAYED_WORK(&ts->fw_work, himax_fw_work);
+	schedule_delayed_work(&ts->fw_work,
+			      msecs_to_jiffies(HIMAX_FW_FIRST_DELAY_MS));
+
+	return 0;
+}
+
+static int himax_remove(struct spi_device *spi)
+{
+	struct himax_ts_data *ts = spi_get_drvdata(spi);
+
+	cancel_delayed_work_sync(&ts->fw_work);
+	return 0;
 }
 
 static int __maybe_unused himax_suspend(struct device *dev)
 {
 	struct himax_ts_data *ts = dev_get_drvdata(dev);
+
+	/* Nothing to do if the controller never came up (no firmware yet). */
+	if (!ts->fw_data)
+		return 0;
 
 	disable_irq(ts->spi->irq);
 	return 0;
@@ -512,6 +949,15 @@ static int __maybe_unused himax_suspend(struct device *dev)
 static int __maybe_unused himax_resume(struct device *dev)
 {
 	struct himax_ts_data *ts = dev_get_drvdata(dev);
+	int ret;
+
+	if (!ts->fw_data)
+		return 0;
+
+	/* SRAM is volatile: re-download the firmware after every suspend. */
+	ret = himax_download_firmware(ts);
+	if (ret)
+		dev_err(dev, "firmware re-download failed on resume: %d\n", ret);
 
 	enable_irq(ts->spi->irq);
 	return 0;
@@ -535,6 +981,7 @@ MODULE_DEVICE_TABLE(of, himax_of_match);
 
 static struct spi_driver himax_spi_driver = {
 	.probe = himax_probe,
+	.remove = himax_remove,
 	.id_table = himax_spi_id,
 	.driver = {
 		.name = "himax-hx83112f",
