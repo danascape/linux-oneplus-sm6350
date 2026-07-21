@@ -312,6 +312,8 @@
 		touchpanel,irq-gpio          = <&tlmm 22 0x2008>;
 		touchpanel,reset-gpio          = <&tlmm 21 0x00>;
 		touchpanel,cs-gpio          = <&tlmm 3 0x00>;
+		/* Consumed by the minimal himax-hx83112f driver (gpiod). */
+		reset-gpios = <&tlmm 21 GPIO_ACTIVE_LOW>;
 		touchpanel,tx-rx-num = <16 36>;
 		touchpanel,button-type = <4>;
 
