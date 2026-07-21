@@ -726,6 +726,16 @@ static int himax_read_event(struct himax_ts_data *ts, struct himax_event *event)
 {
 	int ret;
 
+	/*
+	 * Put the AHB into continuous burst mode (no 4-byte auto-increment)
+	 * before the FIFO read, exactly as the vendor driver does ahead of
+	 * every event-stack read -- without this the 0x30 read returns garbage
+	 * and the checksum fails on every interrupt.
+	 */
+	ret = himax_burst_enable(ts, false);
+	if (ret)
+		return ret;
+
 	ret = himax_ahb_write_byte(ts, HIMAX_AHB_ADDR_BURST_READ,
 				   HIMAX_AHB_CMD_BURST_READ_OFF);
 	if (ret)
