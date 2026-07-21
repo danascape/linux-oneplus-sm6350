@@ -34,11 +34,12 @@
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
-#include <linux/pm.h>
+#include <linux/of.h>
 #include <linux/property.h>
 #include <linux/slab.h>
 #include <linux/spi/spi.h>
 #include <linux/workqueue.h>
+#include <drm/drm_panel.h>
 
 #define HIMAX_MAX_POINTS		10
 
@@ -156,6 +157,16 @@ struct himax_ts_data {
 	/* Deferred firmware load (Android: fw partition mounts after probe). */
 	struct delayed_work fw_work;
 	int fw_retries;
+
+	/*
+	 * In-cell panel: the controller shares power with the display, so it
+	 * loses its SRAM firmware whenever the panel blanks. Track the display
+	 * power state via the drm_panel notifier and reload on unblank.
+	 */
+	struct drm_panel *panel;
+	struct notifier_block panel_nb;
+	bool ready;
+	bool suspended;
 };
 
 /* One config partition merged into a contiguous SRAM window. */
@@ -842,6 +853,7 @@ static int himax_start_hw(struct himax_ts_data *ts)
 	if (ret)
 		return dev_err_probe(ts->dev, ret, "failed to request IRQ\n");
 
+	ts->ready = true;
 	return 0;
 }
 
@@ -892,6 +904,70 @@ static void himax_fw_work(struct work_struct *work)
 			 ts->fw_size);
 }
 
+/* Find the drm_panel referenced by the "panel" phandle on our node. */
+static struct drm_panel *himax_get_panel(struct device *dev)
+{
+	struct device_node *np = dev->of_node;
+	struct device_node *node;
+	struct drm_panel *panel;
+	int i, count;
+
+	count = of_count_phandle_with_args(np, "panel", NULL);
+	if (count <= 0)
+		return NULL;
+
+	for (i = 0; i < count; i++) {
+		node = of_parse_phandle(np, "panel", i);
+		panel = of_drm_find_panel(node);
+		of_node_put(node);
+		if (!IS_ERR(panel))
+			return panel;
+	}
+
+	/* Node exists but the panel driver has not registered yet. */
+	return ERR_PTR(-EPROBE_DEFER);
+}
+
+/*
+ * The in-cell panel powers the touch controller. On blank the controller
+ * loses its SRAM, so quiet the IRQ before power-down and re-download the
+ * firmware once the panel is powered again on unblank.
+ */
+static int himax_panel_notifier(struct notifier_block *nb, unsigned long event,
+				void *data)
+{
+	struct himax_ts_data *ts = container_of(nb, struct himax_ts_data, panel_nb);
+	struct drm_panel_notifier *evd = data;
+	int blank;
+
+	if (event != DRM_PANEL_EVENT_BLANK && event != DRM_PANEL_EARLY_EVENT_BLANK)
+		return NOTIFY_DONE;
+	if (!evd || !evd->data || !ts->ready)
+		return NOTIFY_DONE;
+
+	blank = *(int *)evd->data;
+
+	if (event == DRM_PANEL_EARLY_EVENT_BLANK &&
+	    blank == DRM_PANEL_BLANK_POWERDOWN) {
+		/* Screen off: stop touch before the controller loses power. */
+		if (!ts->suspended) {
+			disable_irq(ts->spi->irq);
+			ts->suspended = true;
+		}
+	} else if (event == DRM_PANEL_EVENT_BLANK &&
+		   blank == DRM_PANEL_BLANK_UNBLANK) {
+		/* Screen on: SRAM is empty again, reload firmware and resume. */
+		if (ts->suspended) {
+			if (himax_download_firmware(ts))
+				dev_err(ts->dev, "fw reload on resume failed\n");
+			enable_irq(ts->spi->irq);
+			ts->suspended = false;
+		}
+	}
+
+	return NOTIFY_DONE;
+}
+
 static int himax_probe(struct spi_device *spi)
 {
 	struct device *dev = &spi->dev;
@@ -924,6 +1000,19 @@ static int himax_probe(struct spi_device *spi)
 		return dev_err_probe(dev, PTR_ERR(ts->reset_gpio),
 				     "failed to get reset gpio\n");
 
+	/* Track display power so we can reload SRAM firmware on unblank. */
+	ts->panel = himax_get_panel(dev);
+	if (IS_ERR(ts->panel))
+		return dev_err_probe(dev, PTR_ERR(ts->panel),
+				     "drm panel not ready\n");
+	if (ts->panel) {
+		ts->panel_nb.notifier_call = himax_panel_notifier;
+		ret = drm_panel_notifier_register(ts->panel, &ts->panel_nb);
+		if (ret)
+			return dev_err_probe(dev, ret,
+					     "failed to register panel notifier\n");
+	}
+
 	/*
 	 * Defer firmware load + controller bring-up: probe returns immediately
 	 * so boot is never blocked waiting for the firmware partition.
@@ -940,40 +1029,11 @@ static int himax_remove(struct spi_device *spi)
 {
 	struct himax_ts_data *ts = spi_get_drvdata(spi);
 
+	if (ts->panel)
+		drm_panel_notifier_unregister(ts->panel, &ts->panel_nb);
 	cancel_delayed_work_sync(&ts->fw_work);
 	return 0;
 }
-
-static int __maybe_unused himax_suspend(struct device *dev)
-{
-	struct himax_ts_data *ts = dev_get_drvdata(dev);
-
-	/* Nothing to do if the controller never came up (no firmware yet). */
-	if (!ts->fw_data)
-		return 0;
-
-	disable_irq(ts->spi->irq);
-	return 0;
-}
-
-static int __maybe_unused himax_resume(struct device *dev)
-{
-	struct himax_ts_data *ts = dev_get_drvdata(dev);
-	int ret;
-
-	if (!ts->fw_data)
-		return 0;
-
-	/* SRAM is volatile: re-download the firmware after every suspend. */
-	ret = himax_download_firmware(ts);
-	if (ret)
-		dev_err(dev, "firmware re-download failed on resume: %d\n", ret);
-
-	enable_irq(ts->spi->irq);
-	return 0;
-}
-
-static SIMPLE_DEV_PM_OPS(himax_pm_ops, himax_suspend, himax_resume);
 
 static const struct spi_device_id himax_spi_id[] = {
 	{ "hx83112f" },
@@ -996,7 +1056,6 @@ static struct spi_driver himax_spi_driver = {
 	.driver = {
 		.name = "himax-hx83112f",
 		.of_match_table = himax_of_match,
-		.pm = &himax_pm_ops,
 	},
 };
 module_spi_driver(himax_spi_driver);

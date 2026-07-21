@@ -1359,6 +1359,7 @@ source "drivers/input/touchscreen/nt36xxx/Kconfig"
 config TOUCHSCREEN_HIMAX_HX83112F
 	tristate "Himax HX83112F no-flash touchscreen (minimal)"
 	depends on SPI_MASTER
+	depends on DRM
 	depends on !TOUCHPANEL_HIMAX_HX83112F_NOFLASH
 	select TOUCHSCREEN_PROPERTIES
 	help
