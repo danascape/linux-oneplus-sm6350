@@ -77,7 +77,7 @@ static int lcd_id = 0;
 static int gesture_switch_value = 0;
 struct drm_panel *tp_active_panel;
 struct drm_panel *lcd_active_panel;
-extern struct dsi_panel *TP_Panel;;
+struct dsi_panel *TP_Panel = NULL;
 
 
 int gesture_mode_value;

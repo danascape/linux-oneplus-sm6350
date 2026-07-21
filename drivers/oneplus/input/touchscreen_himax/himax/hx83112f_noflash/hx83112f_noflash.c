@@ -105,7 +105,7 @@ int check_point_format;
 unsigned char switch_algo;
 uint8_t HX_PROC_SEND_FLAG;
 
-struct dsi_panel *TP_Panel = NULL;
+extern struct dsi_panel *TP_Panel;
 extern int tp_shutdown(struct device *dev);
 
 /*******Part0: SPI Interface***************/
